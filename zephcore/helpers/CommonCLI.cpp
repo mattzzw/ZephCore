@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 #if IS_ENABLED(CONFIG_ZEPHCORE_WIFI_OTA)
 #include "wifi_ota.h"
@@ -309,20 +310,28 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         if (sender_timestamp > curr) {
             getRTCClock()->setCurrentTime(sender_timestamp + 1);
             uint32_t now = getRTCClock()->getCurrentTime();
-            // Simple time formatting
-            snprintf(reply, CLI_REPLY_SIZE, "OK - clock set to %u", now);
+            time_t t = (time_t)now;
+            struct tm *tm = gmtime(&t);
+            snprintf(reply, CLI_REPLY_SIZE, "OK - clock set: %02d:%02d - %d/%d/%d UTC",
+                     tm->tm_hour, tm->tm_min, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900);
         } else {
             strcpy(reply, "ERR: clock cannot go backwards");
         }
     } else if (memcmp(command, "clock", 5) == 0) {
         uint32_t now = getRTCClock()->getCurrentTime();
-        snprintf(reply, CLI_REPLY_SIZE, "Clock: %u", now);
+        time_t t = (time_t)now;
+        struct tm *tm = gmtime(&t);
+        snprintf(reply, CLI_REPLY_SIZE, "Clock: %02d:%02d - %d/%d/%d UTC",
+                 tm->tm_hour, tm->tm_min, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900);
     } else if (memcmp(command, "time ", 5) == 0) {
         uint32_t secs = _atoi(&command[5]);
         uint32_t curr = getRTCClock()->getCurrentTime();
         if (secs > curr) {
             getRTCClock()->setCurrentTime(secs);
-            snprintf(reply, CLI_REPLY_SIZE, "OK - clock set to %u", secs);
+            time_t t = (time_t)secs;
+            struct tm *tm = gmtime(&t);
+            snprintf(reply, CLI_REPLY_SIZE, "OK - clock set: %02d:%02d - %d/%d/%d UTC",
+                     tm->tm_hour, tm->tm_min, tm->tm_mday, tm->tm_mon + 1, tm->tm_year + 1900);
         } else {
             strcpy(reply, "(ERR: clock cannot go backwards)");
         }
