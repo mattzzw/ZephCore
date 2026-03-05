@@ -530,17 +530,26 @@ void LoRaRadioBase::triggerNoiseFloorCalibrate(int threshold)
 		return;
 	}
 
-	/* Take multiple RSSI reads and use the minimum.  The noise floor is
-	 * the lowest ambient energy — any higher sample contains signal or
-	 * interference.  Min of N reads (~200 us) naturally rejects
-	 * interference-contaminated samples. */
-	int16_t rssi = hwGetCurrentRSSI();
-	for (int i = 1; i < NOISE_FLOOR_SAMPLES_PER_TICK; i++) {
-		int16_t s = hwGetCurrentRSSI();
-		if (s < rssi) {
-			rssi = s;
-		}
+	/* Median of multiple RSSI reads (~200 us).  Rejects up to N/2-1
+	 * outliers in either direction without the downward bias of min
+	 * or the spike sensitivity of average.  Insertion sort is fine
+	 * for N=8 (28 comparisons worst case, all in registers). */
+	int16_t samples[NOISE_FLOOR_SAMPLES_PER_TICK];
+	for (int i = 0; i < NOISE_FLOOR_SAMPLES_PER_TICK; i++) {
+		samples[i] = hwGetCurrentRSSI();
 	}
+	/* Insertion sort — tiny array, branch-friendly on Cortex-M */
+	for (int i = 1; i < NOISE_FLOOR_SAMPLES_PER_TICK; i++) {
+		int16_t key = samples[i];
+		int j = i - 1;
+		while (j >= 0 && samples[j] > key) {
+			samples[j + 1] = samples[j];
+			j--;
+		}
+		samples[j + 1] = key;
+	}
+	int16_t rssi = (samples[NOISE_FLOOR_SAMPLES_PER_TICK / 2 - 1] +
+			samples[NOISE_FLOOR_SAMPLES_PER_TICK / 2]) / 2;
 
 	/* First sample after reset (DEFAULT_NOISE_FLOOR == 0): seed directly. */
 	if (_noise_floor == DEFAULT_NOISE_FLOOR) {
@@ -555,16 +564,17 @@ void LoRaRadioBase::triggerNoiseFloorCalibrate(int threshold)
 	/* Threshold filter with warmup and periodic bypass.
 	 *
 	 * _ema_unguarded counts up from 0 on every tick.
-	 *   Ticks 0..N-1 (warmup): all samples accepted for fast convergence
+	 *   Ticks 0..W-1 (warmup): all samples accepted for fast convergence
 	 *     after seed/reset — prevents a bad seed from locking out the
 	 *     real noise floor via a too-tight threshold.
-	 *   Ticks N+: threshold filter active. Every Nth tick (when the low
-	 *     bits are zero) one sample bypasses the filter so the floor can
-	 *     track sustained upward shifts (new interference, antenna change).
+	 *   Ticks W+: threshold filter active. Every Pth tick one sample
+	 *     bypasses the filter so the floor can track sustained upward
+	 *     shifts (new interference, antenna change).
 	 *     The EMA's 1/8 weight naturally dampens isolated spikes. */
-	const int N = (1 << NOISE_FLOOR_EMA_SHIFT);  /* 8 */
-	bool warmup = (_ema_unguarded < N);
-	bool periodic = (!warmup && (_ema_unguarded & (N - 1)) == 0);
+	const int W = (1 << NOISE_FLOOR_EMA_SHIFT);             /* 8  — warmup ticks */
+	const int P = NOISE_FLOOR_UNGUARDED_INTERVAL;            /* 16 — periodic interval */
+	bool warmup = (_ema_unguarded < W);
+	bool periodic = (!warmup && (_ema_unguarded & (P - 1)) == 0);
 	_ema_unguarded++;  /* wraps at 255 — harmless */
 
 	if (!warmup && !periodic &&
@@ -572,14 +582,14 @@ void LoRaRadioBase::triggerNoiseFloorCalibrate(int threshold)
 		return;
 	}
 
-	/* EMA: floor += round_nearest((sample - floor) / N).
+	/* EMA: floor += round_nearest((sample - floor) / W).
 	 * Plain >> has downward bias (-1>>3 == -1 but +1>>3 == 0).
 	 * Plain /  has a ±7 dead zone (small drifts ignored).
 	 * Round-to-nearest: add half the divisor before dividing,
 	 * with sign-aware bias so both directions are symmetric. */
 	int diff = rssi - _noise_floor;
-	int half = N / 2;                                      /* 4 */
-	int step = (diff + (diff > 0 ? half : -half)) / N;
+	int half = W / 2;                                      /* 4 */
+	int step = (diff + (diff > 0 ? half : -half)) / W;
 	_noise_floor += step;
 	if (_noise_floor < -120) _noise_floor = -120;
 	if (_noise_floor > -50) _noise_floor = -50;

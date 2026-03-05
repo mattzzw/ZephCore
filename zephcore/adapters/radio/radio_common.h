@@ -12,14 +12,15 @@
 #include <zephyr/drivers/lora.h>
 
 /* --- Noise floor calibration (EMA) ---
- * Takes SAMPLES_PER_TICK RSSI reads (~100 us), feeds the minimum into an
- * exponential moving average.  Using min naturally rejects interference
- * spikes — the noise floor is the lowest ambient energy in the band.
+ * Median of SAMPLES_PER_TICK RSSI reads (~200 us), fed into an
+ * exponential moving average.  Median rejects up to N/2-1 outliers
+ * without the downward bias of min or spike sensitivity of average.
  * alpha = 1/8: new_floor = floor + round((sample - floor) / 8)
  * Convergence: ~8 ticks (~40s at 5s housekeeping) to track a step change.
  * Samples above floor + SAMPLING_THRESHOLD are rejected (interference). */
 #define NOISE_FLOOR_EMA_SHIFT            3   /* alpha = 1 / (1 << 3) = 1/8 */
-#define NOISE_FLOOR_SAMPLES_PER_TICK     4   /* min of 4 RSSI reads per tick */
+#define NOISE_FLOOR_SAMPLES_PER_TICK     8   /* median of 8 RSSI reads per tick */
+#define NOISE_FLOOR_UNGUARDED_INTERVAL   16  /* ticks between unfiltered samples (must be power of 2) */
 #define NOISE_FLOOR_SAMPLING_THRESHOLD   14  /* only sample if rssi < floor + threshold */
 #define DEFAULT_NOISE_FLOOR              0   /* accept all samples until first update */
 
