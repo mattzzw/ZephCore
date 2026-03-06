@@ -165,6 +165,7 @@ static const enum ui_page active_pages[] = {
 	UI_PAGE_ADVERT,
 	UI_PAGE_GPS,
 	UI_PAGE_BUZZER,
+	UI_PAGE_LEDS,
 	UI_PAGE_SENSORS,
 	UI_PAGE_OFFGRID,
 	UI_PAGE_DFU,
@@ -512,6 +513,20 @@ static void render_buzzer(void)
 		      state.buzzer_quiet ? "Press to Enable" : "Press to Disable");
 }
 
+static void render_leds(void)
+{
+	char buf[24];
+	int y = CONTENT_Y;
+
+	snprintf(buf, sizeof(buf), "LEDs: %s",
+		 state.leds_disabled ? "off" : "on");
+	mc_display_text(0, y, buf, false);
+	y += LINE_H;
+
+	draw_centered(y + 8,
+		      state.leds_disabled ? "Press to Enable" : "Press to Disable");
+}
+
 static void render_sensors(void)
 {
 	char buf[24];
@@ -671,6 +686,7 @@ static const page_render_fn renderers[] = {
 	[UI_PAGE_ADVERT]    = render_advert,
 	[UI_PAGE_GPS]       = render_gps,
 	[UI_PAGE_BUZZER]    = render_buzzer,
+	[UI_PAGE_LEDS]      = render_leds,
 	[UI_PAGE_SENSORS]   = render_sensors,
 	[UI_PAGE_OFFGRID]   = render_offgrid,
 	[UI_PAGE_DFU]       = render_dfu,

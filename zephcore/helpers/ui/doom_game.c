@@ -664,6 +664,11 @@ static const uint8_t glyph_H[5] = {0x9, 0x9, 0xF, 0x9, 0x9};
 static const uint8_t glyph_P[5] = {0xE, 0x9, 0xE, 0x8, 0x8};
 static const uint8_t glyph_A[5] = {0x6, 0x9, 0xF, 0x9, 0x9};
 static const uint8_t glyph_M[5] = {0x9, 0xF, 0xF, 0x9, 0x9};
+static const uint8_t glyph_G[5] = {0x7, 0x8, 0xB, 0x9, 0x7};
+static const uint8_t glyph_E[5] = {0xF, 0x8, 0xE, 0x8, 0xF};
+static const uint8_t glyph_O[5] = {0x6, 0x9, 0x9, 0x9, 0x6};
+static const uint8_t glyph_V[5] = {0x9, 0x9, 0x9, 0x6, 0x4};
+static const uint8_t glyph_R[5] = {0xE, 0x9, 0xE, 0xC, 0x9};
 
 static void draw_glyph(int dx, int dy, const uint8_t *glyph)
 {
@@ -821,7 +826,17 @@ static void draw_game_over(void)
 	blit_letter(start_x + 20, start_y, letter_A);
 	blit_letter(start_x + 30, start_y, letter_D);
 
-	draw_number((SCREEN_W - 12) / 2, start_y + 14, game.score);
+	/* "game over" on one line: GAME(4 chars) + 7px gap + OVER(4 chars) = 40px */
+	int go_x = (SCREEN_W - 40) / 2;
+	int go_y = start_y + 14;
+	draw_glyph(go_x,      go_y, glyph_G);
+	draw_glyph(go_x +  5, go_y, glyph_A);
+	draw_glyph(go_x + 10, go_y, glyph_M);
+	draw_glyph(go_x + 15, go_y, glyph_E);
+	draw_glyph(go_x + 22, go_y, glyph_O);
+	draw_glyph(go_x + 27, go_y, glyph_V);
+	draw_glyph(go_x + 32, go_y, glyph_E);
+	draw_glyph(go_x + 37, go_y, glyph_R);
 }
 
 /* ========== DISPLAY ========== */

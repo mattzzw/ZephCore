@@ -277,6 +277,7 @@ static void action_page_prev(void)
 static void action_flood_advert(void);
 static void action_gps_toggle(void);
 static void action_buzzer_toggle(void);
+static void action_leds_toggle(void);
 #ifdef CONFIG_ZEPHCORE_UI_DISPLAY
 static void action_ble_toggle(void);
 static void action_enter_dfu(void);
@@ -317,6 +318,11 @@ static void action_page_enter(void)
 	case UI_PAGE_BUZZER:
 		/* Toggle buzzer mute (same as triple-tap) */
 		action_buzzer_toggle();
+		break;
+
+	case UI_PAGE_LEDS:
+		/* Toggle LED on/off */
+		action_leds_toggle();
 		break;
 
 	case UI_PAGE_OFFGRID: {
@@ -458,6 +464,18 @@ static void action_buzzer_toggle(void)
 	get_state()->buzzer_quiet = !was_quiet;
 	LOG_INF("buzzer %s", buzzer_is_quiet() ? "muted" : "unmuted");
 #endif
+	schedule_render();
+}
+
+static void action_leds_toggle(void)
+{
+	struct ui_state *s = get_state();
+	bool new_disabled = !s->leds_disabled;
+
+	s->leds_disabled = new_disabled;
+	ui_set_heartbeat_led(!new_disabled);
+	mesh_set_leds_disabled(new_disabled);
+	LOG_INF("LEDs %s (user toggle)", new_disabled ? "disabled" : "enabled");
 	schedule_render();
 }
 
@@ -1030,6 +1048,28 @@ void ui_set_offgrid_mode(bool enabled)
 	struct ui_state *s = get_state();
 
 	s->offgrid_enabled = enabled;
+}
+
+void ui_set_leds_disabled(bool disabled)
+{
+	struct ui_state *s = get_state();
+
+	s->leds_disabled = disabled;
+}
+
+void ui_set_heartbeat_led(bool enabled)
+{
+#if HAS_HEARTBEAT_LED
+	if (enabled) {
+		if (gpio_is_ready_dt(&heartbeat_led)) {
+			k_work_reschedule(&led_on_work, K_NO_WAIT);
+		}
+	} else {
+		k_work_cancel_delayable(&led_on_work);
+		k_work_cancel_delayable(&led_off_work);
+		gpio_pin_set_dt(&heartbeat_led, 0);
+	}
+#endif
 }
 
 void ui_refresh_display(void)

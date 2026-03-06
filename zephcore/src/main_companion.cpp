@@ -654,6 +654,13 @@ int main(void)
 	ui_play_startup_chime();
 #endif
 
+	/* Restore LED enabled/disabled state from persisted prefs.
+	 * If LEDs were disabled, stop the heartbeat LED cycle. */
+	bool leds_off = companion_mesh.prefs.leds_disabled != 0;
+	ui_set_leds_disabled(leds_off);
+	ui_set_heartbeat_led(!leds_off);
+	LOG_INF("LEDs: %s (from prefs)", leds_off ? "disabled" : "enabled");
+
 	/* Restore GPS state from persisted prefs.
 	 * GPS hardware is powered at boot (bootloader/pull-up).
 	 * First, ensure power state matches prefs (powers off if disabled).

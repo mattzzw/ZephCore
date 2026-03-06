@@ -192,28 +192,13 @@ config ZEPHCORE_BLE_CONN_TIMEOUT
 	  Supervision timeout in 10ms units.
 	  500 = 5000ms. Connection drops if no data for this duration.
 
-config ZEPHCORE_BLE_ADV_FAST_INTERVAL
-	int "BLE fast advertising interval (units: 0.625ms)"
-	default 32
-	range 20 1600
-	help
-	  Fast advertising interval in 0.625ms units.
-	  32 = 20ms (Apple-recommended for quick discovery).
-
 config ZEPHCORE_BLE_ADV_SLOW_INTERVAL
-	int "BLE slow advertising interval (units: 0.625ms)"
+	int "BLE advertising interval (units: 0.625ms)"
 	default 338
 	range 244 3200
 	help
-	  Slow advertising interval in 0.625ms units.
+	  Advertising interval in 0.625ms units.
 	  338 = 211.25ms (Apple-compliant, balanced discovery/battery).
-
-config ZEPHCORE_BLE_ADV_FAST_TIMEOUT
-	int "Duration of fast advertising mode (seconds)"
-	default 30
-	range 10 300
-	help
-	  How long to advertise at the fast rate before switching to slow.
 
 endmenu # BLE Configuration
 
@@ -441,9 +426,11 @@ config ZEPHCORE_UI_BUZZER
 	  Enable PWM buzzer with RTTTL melody support.
 	  Requires a PWM-capable pin connected to a buzzer.
 
+DT_CHOSEN_ZEPHCORE_DISPLAY := zephyr,display
+
 config ZEPHCORE_UI_DISPLAY
 	bool "Enable display (OLED, LCD, e-ink)"
-	default y if $(dt_chosen_enabled,zephyr/display)
+	default y if $(dt_chosen_enabled,$(DT_CHOSEN_ZEPHCORE_DISPLAY))
 	select DISPLAY
 	select CHARACTER_FRAMEBUFFER
 	help

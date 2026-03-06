@@ -34,6 +34,7 @@ LOG_MODULE_REGISTER(zephcore_ui_actions, CONFIG_ZEPHCORE_UI_ACTIONS_LOG_LEVEL);
 #define UI_ACTION_BUZZER_TOGGLE  BIT(2)
 #define UI_ACTION_ZEROHOP_ADVERT BIT(3)
 #define UI_ACTION_OFFGRID_TOGGLE BIT(4)
+#define UI_ACTION_LEDS_TOGGLE    BIT(5)
 
 /* Module-local pointers, set by init */
 static CompanionMesh *s_mesh;
@@ -53,6 +54,7 @@ static atomic_t pending_ui_actions;
 static atomic_t pending_gps_enabled;
 static atomic_t pending_buzzer_quiet;
 static atomic_t pending_offgrid_enabled;
+static atomic_t pending_leds_disabled;
 
 extern "C" void ui_mesh_actions_init(struct k_event *mesh_events,
 				     uint32_t mesh_event_ui_action,
@@ -112,6 +114,14 @@ extern "C" void mesh_set_offgrid_mode(bool enable)
 	/* Defer the flash write (savePrefs) to mesh thread */
 	atomic_set(&pending_offgrid_enabled, enable ? 1 : 0);
 	atomic_or(&pending_ui_actions, UI_ACTION_OFFGRID_TOGGLE);
+	k_event_post(s_mesh_events, s_mesh_event_ui_action);
+}
+
+extern "C" void mesh_set_leds_disabled(bool disabled)
+{
+	/* Defer the flash write (savePrefs) to mesh thread */
+	atomic_set(&pending_leds_disabled, disabled ? 1 : 0);
+	atomic_or(&pending_ui_actions, UI_ACTION_LEDS_TOGGLE);
 	k_event_post(s_mesh_events, s_mesh_event_ui_action);
 }
 
@@ -197,6 +207,13 @@ extern "C" void mesh_handle_ui_actions(void)
 		bool og = atomic_get(&pending_offgrid_enabled) != 0;
 		s_mesh->prefs.client_repeat = og ? 1 : 0;
 		LOG_INF("client_repeat=%d (button)", og);
+		need_save = true;
+	}
+
+	if (actions & UI_ACTION_LEDS_TOGGLE) {
+		bool ld = atomic_get(&pending_leds_disabled) != 0;
+		s_mesh->prefs.leds_disabled = ld ? 1 : 0;
+		LOG_INF("leds_disabled=%d (button)", ld);
 		need_save = true;
 	}
 

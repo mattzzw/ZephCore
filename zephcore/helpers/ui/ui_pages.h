@@ -27,6 +27,7 @@ enum ui_page {
 	UI_PAGE_ADVERT,         /* Send broadcast advert */
 	UI_PAGE_GPS,            /* GPS status / position */
 	UI_PAGE_BUZZER,         /* Buzzer mute toggle */
+	UI_PAGE_LEDS,           /* LED enable/disable toggle */
 	UI_PAGE_SENSORS,        /* Environment sensor data */
 	UI_PAGE_OFFGRID,        /* Offgrid mode (client repeat) toggle */
 	UI_PAGE_DFU,            /* BLE DFU bootloader entry */
@@ -81,6 +82,9 @@ struct ui_state {
 
 	/* Buzzer page */
 	bool     buzzer_quiet;     /* true = muted */
+
+	/* LEDs page */
+	bool     leds_disabled;    /* true = LEDs off */
 
 	/* Sensors page */
 	int16_t  temperature_c10;  /* temp in 0.1°C */

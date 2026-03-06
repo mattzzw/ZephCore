@@ -405,6 +405,13 @@ void ZephyrDataStore::loadPrefs(NodePrefs &prefs)
 	} else {
 		prefs.rx_boost = 1;  /* Default to boosted for better sensitivity */
 	}
+
+	/* Offset 93: leds_disabled (ZephCore extension) */
+	if (off < len) {
+		prefs.leds_disabled = buf[off++];
+	} else {
+		prefs.leds_disabled = 0;  /* Default: LEDs on */
+	}
 }
 
 void ZephyrDataStore::savePrefs(const NodePrefs &prefs)
@@ -453,7 +460,9 @@ void ZephyrDataStore::savePrefs(const NodePrefs &prefs)
 	buf[off++] = prefs.autoadd_max_hops;
 	/* Offset 92: rx_boost (ZephCore extension — Arduino ignores) */
 	buf[off++] = prefs.rx_boost;
-	/* Total: 93 bytes (Arduino reads 92, ZephCore reads 93) */
+	/* Offset 93: leds_disabled (ZephCore extension) */
+	buf[off++] = prefs.leds_disabled;
+	/* Total: 94 bytes (Arduino reads 92, ZephCore reads 94) */
 
 	bool ok = openWrite(PREFS_FILE, buf, off);
 	LOG_INF("savePrefs: wrote %s, ok=%d (%d bytes), name='%.16s'",

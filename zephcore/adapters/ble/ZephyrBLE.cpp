@@ -48,10 +48,8 @@ LOG_MODULE_REGISTER(zephcore_ble, CONFIG_ZEPHCORE_BLE_LOG_LEVEL);
  * BLE stack when the link is marginal, fast enough to recover quickly. */
 #define BLE_TX_OVERFLOW_RETRY_MS 250
 
-/* Advertising intervals (Apple Accessory Design Guidelines) */
-#define BT_ADV_INTERVAL_FAST     CONFIG_ZEPHCORE_BLE_ADV_FAST_INTERVAL
-#define BT_ADV_INTERVAL_SLOW     CONFIG_ZEPHCORE_BLE_ADV_SLOW_INTERVAL
-#define BT_ADV_FAST_TIMEOUT_SEC  CONFIG_ZEPHCORE_BLE_ADV_FAST_TIMEOUT
+/* Advertising interval (Apple Accessory Design Guidelines) */
+#define BT_ADV_INTERVAL          CONFIG_ZEPHCORE_BLE_ADV_SLOW_INTERVAL
 
 /* ========== Frame type for queues ========== */
 
@@ -118,10 +116,6 @@ static enum zephcore_iface active_iface = ZEPHCORE_IFACE_NONE;
 /* DLE tracking — set after successful DLE request to avoid double-request */
 static bool dle_requested;
 
-/* Advertising state */
-static bool adv_switching = false;
-static bool adv_is_slow = false;
-static bool adv_post_disconnect = false;  /* skip fast advert after disconnect */
 
 /* Runtime BLE passkey */
 static uint32_t ble_passkey = CONFIG_ZEPHCORE_BLE_PASSKEY;
@@ -176,11 +170,9 @@ STRUCT_SECTION_ITERABLE(bt_nus_inst, secure_nus) = {
 /* ========== Work items ========== */
 
 static void tx_drain_work_fn(struct k_work *work);
-static void adv_slow_work_fn(struct k_work *work);
 static void overflow_retry_work_fn(struct k_work *work);
 
 K_WORK_DELAYABLE_DEFINE(tx_drain_work, tx_drain_work_fn);
-K_WORK_DELAYABLE_DEFINE(adv_slow_work, adv_slow_work_fn);
 K_WORK_DELAYABLE_DEFINE(overflow_retry_work, overflow_retry_work_fn);
 
 /* ========== TX completion callback ========== */
@@ -270,10 +262,6 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	LOG_INF("connected: %s", addr);
 	current_conn = bt_conn_ref(conn);
 
-	/* Cancel slow advertising work - we're connected now */
-	k_work_cancel_delayable(&adv_slow_work);
-	adv_is_slow = false;
-
 	/* DLE is NOT requested here — the phone may start a PHY update LL
 	 * procedure immediately, and BLE allows only one at a time.
 	 * DLE is deferred to le_phy_updated() (after PHY negotiation completes)
@@ -341,34 +329,14 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	k_work_cancel_delayable(&tx_drain_work);
 	k_work_cancel_delayable(&overflow_retry_work);
 
-	/* Skip fast advertising on reconnect — go straight to slow.
-	 * Prevents tight reconnect flapping loops on flaky links. */
-	adv_post_disconnect = true;
-
 	/* Notify main of BLE disconnection */
 	if (ble_cbs && ble_cbs->on_disconnected) {
 		ble_cbs->on_disconnected();
 	}
 }
 
-/* Flag to suppress recycled() callback during adv mode switch */
 static void recycled(void)
 {
-	if (adv_switching || adv_is_slow) {
-		LOG_DBG("suppressed (switching=%d slow=%d)",
-			adv_switching, adv_is_slow);
-		return;
-	}
-
-	if (adv_post_disconnect) {
-		/* After disconnect, skip fast advertising — go straight to slow.
-		 * Prevents rapid reconnect flapping on flaky BLE links. */
-		adv_post_disconnect = false;
-		LOG_INF("post-disconnect: starting slow advertising directly");
-		adv_slow_work_fn(NULL);
-		return;
-	}
-
 	LOG_DBG("restart advertising");
 	start_adv();
 }
@@ -784,53 +752,18 @@ static ssize_t secure_nus_rx_write(struct bt_conn *conn, const struct bt_gatt_at
 
 static void start_adv(void)
 {
-	/* Start with fast 20ms advertising for quick discovery */
 	struct bt_le_adv_param adv_param = {
 		.id = BT_ID_DEFAULT,
 		.options = BT_LE_ADV_OPT_CONN,
-		.interval_min = BT_ADV_INTERVAL_FAST,
-		.interval_max = BT_ADV_INTERVAL_FAST,
+		.interval_min = BT_ADV_INTERVAL,
+		.interval_max = BT_ADV_INTERVAL,
 	};
 
-	adv_is_slow = false;
 	int err = bt_le_adv_start(&adv_param, ad, ad_len, sd, sd_len);
 	if (err && err != -EALREADY) {
 		LOG_ERR("adv start failed: %d", err);
 	} else {
-		LOG_INF("BLE advertising: fast mode (20ms) for %ds", BT_ADV_FAST_TIMEOUT_SEC);
-		/* Schedule switch to slow mode after timeout */
-		k_work_schedule(&adv_slow_work, K_SECONDS(BT_ADV_FAST_TIMEOUT_SEC));
-	}
-}
-
-static void adv_slow_work_fn(struct k_work *work)
-{
-	ARG_UNUSED(work);
-
-	/* Only switch if not connected */
-	if (current_conn) {
-		return;
-	}
-
-	/* Stop current advertising and restart with slow interval.
-	 * Set flag to prevent recycled() from calling start_adv() again. */
-	adv_switching = true;
-	bt_le_adv_stop();
-
-	struct bt_le_adv_param adv_param = {
-		.id = BT_ID_DEFAULT,
-		.options = BT_LE_ADV_OPT_CONN,
-		.interval_min = BT_ADV_INTERVAL_SLOW,
-		.interval_max = BT_ADV_INTERVAL_SLOW,
-	};
-
-	int err = bt_le_adv_start(&adv_param, ad, ad_len, sd, sd_len);
-	adv_switching = false;
-	if (err && err != -EALREADY) {
-		LOG_ERR("slow adv start failed: %d", err);
-	} else {
-		adv_is_slow = true;
-		LOG_INF("BLE advertising: slow mode (546ms)");
+		LOG_INF("BLE advertising: 211ms");
 	}
 }
 
@@ -933,11 +866,7 @@ void zephcore_ble_set_enabled(bool enable)
 					   BT_HCI_ERR_REMOTE_USER_TERM_CONN);
 		}
 		/* Stop advertising */
-		adv_switching = true;
 		bt_le_adv_stop();
-		adv_switching = false;
-		adv_is_slow = false;
-		k_work_cancel_delayable(&adv_slow_work);
 		LOG_INF("BLE disabled");
 	} else {
 		/* Re-enable advertising */

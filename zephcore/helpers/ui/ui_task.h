@@ -149,6 +149,16 @@ void ui_set_ble_enabled(bool enabled);
 void ui_set_buzzer_quiet(bool quiet);
 
 /**
+ * Set LEDs disabled state (for display page).
+ */
+void ui_set_leds_disabled(bool disabled);
+
+/**
+ * Enable or disable the heartbeat LED.
+ */
+void ui_set_heartbeat_led(bool enabled);
+
+/**
  * Set offgrid mode (client repeat) state for display page.
  */
 void ui_set_offgrid_mode(bool enabled);
