@@ -20,10 +20,6 @@
 		led0 = &user_led;
 	};
 
-	chosen {
-		zephyr,settings-partition = &storage_partition;
-	};
-
 	leds {
 		compatible = "gpio-leds";
 		user_led: led_0 {
@@ -62,25 +58,19 @@
 };
 
 /*
- * Flash partitions — split default storage into NVS + LittleFS.
- * Standard ESP32 4MB layout:
- *   0x3B0000 - 0x3B2000 (8KB)   NVS (BLE bonds)
- *   0x3B2000 - 0x3E0000 (184KB) LittleFS (identity, contacts)
+ * Flash partitions — repartition default ESP32 layout.
+ * Default storage_partition is 192KB at 0x3B0000.
+ *
+ * 0x3B0000 - 0x3E0000 (192KB) LittleFS (identity, contacts, channels, BLE bonds)
  */
 /delete-node/ &storage_partition;
 
 &flash0 {
 	partitions {
-		/* NVS 8KB for BLE bonds + settings */
-		storage_partition: partition@3b0000 {
-			label = "storage";
-			reg = <0x3B0000 0x2000>;
-		};
-
-		/* LittleFS 184KB for DataStore */
-		lfs_partition: partition@3b2000 {
+		/* LittleFS 192KB for DataStore + file-based BLE settings */
+		lfs_partition: partition@3b0000 {
 			label = "lfs";
-			reg = <0x3B2000 0x2E000>;
+			reg = <0x3B0000 0x30000>;
 		};
 	};
 };

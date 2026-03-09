@@ -357,8 +357,9 @@ Power: `powersaving on/off`
 
 ### 7.2 DataStore (`adapters/datastore/`)
 
-- **Internal**: LittleFS on flash (`/lfs`)
+- **Internal**: LittleFS on flash (`/lfs`), 256-byte cache for reduced flash I/O
 - **External**: Optional LittleFS on QSPI (`/ext`) with auto-migration
+- **BLE bonds**: File-based settings on LittleFS (`/lfs/settings/`) — all platforms (no NVS)
 - **Prefs**: 93-byte binary format, Arduino-compatible, field-by-field I/O
 - **Contacts**: 152-byte records, stored on external flash if available
 - **Channels**: 68-byte records (4 pad + 32 name + 32 secret)
@@ -381,7 +382,7 @@ Power: `powersaving on/off`
 
 ### 7.5 Board (`adapters/board/`)
 
-- Battery ADC with optional regulator-gated voltage divider, 8-sample average
+- Battery ADC with optional regulator-gated voltage divider, 8-sample average (boards with `zephyr,user` ADC node; MG24 has no battery divider, ADC disabled)
 - UF2 bootloader entry via GPREGRET magic (0x57 = UF2, 0xA8 = BLE DFU)
 - TX LED bracketing for LoRa transmissions
 - Bootloader version detection via flash memory scan
@@ -442,7 +443,14 @@ prj.conf (base: console, logging)
 - **Radio**: `ZEPHCORE_RADIO_NATIVE` (SX126x, default) vs `ZEPHCORE_RADIO_LR1110`
 - **Features**: Display, buzzer, buttons, multi-tap, Doom (auto-enabled from DT)
 
-### 9.3 Patches
+### 9.3 Platform Notes
+
+- **nRF52840**: Zephyr open-source BLE controller, UF2 bootloader, partial flash erase for BLE coexistence
+- **nRF54L15**: Same BLE controller as nRF52, CMSIS-DAP via SAMD11 bridge, no native USB
+- **ESP32**: Espressif proprietary BLE blob, 32KB heap, asserts disabled (blob IRQ false positives)
+- **EFR32MG24**: SiLabs proprietary BLE blob, 32KB heap, SEMAILBOX enabled for hardware TRNG/crypto entropy, ADC disabled (no battery divider), CMSIS-DAP via onboard SAMD11
+
+### 9.4 Patches
 
 | Patch | Risk | Purpose |
 |-------|------|---------|
@@ -451,12 +459,14 @@ prj.conf (base: console, logging)
 | 0005-gnss-air530z-easy | MEDIUM | EASY ephemeris + removes PM (prevents deadlocks) |
 | 0006-blobs-py | LOW | Fix `west blobs fetch` KeyError |
 
-### 9.4 Flash Partition Layouts
+### 9.5 Flash Partition Layouts
 
 **nRF52840 SD v6**: SoftDevice 152KB → App 696KB → LFS 128KB → UF2 48KB
 **nRF52840 SD v7**: SoftDevice 156KB → App 692KB → LFS 128KB → UF2 48KB
-**ESP32 (4MB)**: Boot + App → NVS 8KB → LFS 184KB
-**nRF54L15**: MCUboot 64KB → App 1272KB → NVS 8KB → LFS 84KB
+**ESP32 (4MB)**: Boot + App → LFS 192KB
+**ESP32-S3 (16MB)**: Boot + App → LFS 384KB
+**nRF54L15**: MCUboot 64KB → App 1272KB → LFS 92KB
+**EFR32MG24**: MCUboot 48KB → App 1344KB → LFS 144KB
 
 ---
 
@@ -573,6 +583,7 @@ Over USB CDC: V3 framing: `[2B LE length] [1B opcode] [payload...]`
 | `/lfs/adv_blobs` or `/ext/adv_blobs` | Advert cache | Fixed-size blob records |
 | `/lfs/repeater/acl` | Client ACL | 136B × N records |
 | `/lfs/repeater/regions2` | Region map | Header + 164B × N entries |
+| `/lfs/settings/` | BLE bonds + Zephyr settings | File-based settings (all platforms) |
 
 ### Preferences Binary Layout (93 bytes)
 

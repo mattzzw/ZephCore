@@ -21,7 +21,6 @@
 	};
 
 	chosen {
-		zephyr,settings-partition = &storage_partition;
 		zephyr,display = &oled;
 	};
 
@@ -89,7 +88,8 @@
  * Flash partitions — repartition default ESP32-S3 16 MB layout.
  * Default storage_partition is 192 KB at 0xFB0000.
  * Delete unused partitions (lpcore, scratch, coredump) to reclaim space.
- * Split into: NVS 8 KB (BLE bonds) + LittleFS 376 KB (DataStore).
+ *
+ * 0xFA0000 - 0x1000000 (384KB) LittleFS (identity, contacts, channels, BLE bonds)
  */
 /delete-node/ &slot0_lpcore_partition;
 /delete-node/ &slot1_lpcore_partition;
@@ -99,16 +99,10 @@
 
 &flash0 {
 	partitions {
-		/* NVS 8 KB for BLE bonds + settings */
-		storage_partition: partition@fa0000 {
-			label = "storage";
-			reg = <0xFA0000 0x2000>;
-		};
-
-		/* LittleFS 376 KB for DataStore (identity, contacts, channels, etc.) */
-		lfs_partition: partition@fa2000 {
+		/* LittleFS 384KB for DataStore + file-based BLE settings */
+		lfs_partition: partition@fa0000 {
 			label = "lfs";
-			reg = <0xFA2000 0x5E000>;
+			reg = <0xFA0000 0x60000>;
 		};
 	};
 };

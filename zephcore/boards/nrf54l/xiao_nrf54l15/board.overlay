@@ -20,10 +20,6 @@
 	aliases {
 		lora0 = &lora;
 	};
-
-	chosen {
-		zephyr,settings-partition = &storage_partition;
-	};
 };
 
 /* Disable I2C22 — default pins P1.10/P1.11 (D4/D5) conflict with NSS/RXEN */
@@ -67,8 +63,7 @@
  *
  * 0x00000 - 0x10000   (64KB)   MCUboot (reserved, even if unused)
  * 0x10000 - 0x14E000  (1272KB) Application (slot0 — expanded into slot1 space)
- * 0x14E000 - 0x150000 (8KB)    NVS storage (BLE bonds) — 2 sectors × 4KB
- * 0x150000 - 0x165000 (84KB)   LittleFS (identity, contacts, channels)
+ * 0x14E000 - 0x165000 (92KB)   LittleFS (identity, contacts, channels, BLE bonds)
  */
 /delete-node/ &slot0_partition;
 /delete-node/ &slot1_partition;
@@ -82,16 +77,10 @@
 			reg = <0x10000 0x13E000>;  /* 1272KB */
 		};
 
-		/* NVS 8KB for BLE bonds + settings (2 × 4KB sectors) */
-		storage_partition: partition@14e000 {
-			label = "storage";
-			reg = <0x14E000 0x2000>;
-		};
-
-		/* LittleFS 84KB for DataStore */
-		lfs_partition: partition@150000 {
+		/* LittleFS 92KB for DataStore + file-based BLE settings */
+		lfs_partition: partition@14e000 {
 			label = "lfs";
-			reg = <0x150000 0x15000>;
+			reg = <0x14E000 0x17000>;
 		};
 	};
 };
