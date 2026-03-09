@@ -121,6 +121,12 @@ static bool dle_requested;
 /* Fast advertising — true for BT_ADV_FAST_DURATION_MS after boot or disconnect */
 static bool fast_adv_active;
 
+/* Set before bt_le_adv_stop() in adv_slow_work_fn to suppress recycled() from
+ * restarting fast advertising. Zephyr fires recycled() when the pre-allocated
+ * connection slot is freed after any adv stop — not just on disconnect.
+ * Cleared by recycled() itself (both run on the cooperative system work queue). */
+static bool adv_stop_for_interval_change;
+
 
 /* Runtime BLE passkey */
 static uint32_t ble_passkey = CONFIG_ZEPHCORE_BLE_PASSKEY;
@@ -347,6 +353,10 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
 static void recycled(void)
 {
+	if (adv_stop_for_interval_change) {
+		adv_stop_for_interval_change = false;
+		return;
+	}
 	LOG_DBG("restart advertising");
 	fast_adv_active = true;
 	k_work_reschedule(&adv_slow_work, K_MSEC(BT_ADV_FAST_DURATION_MS));
@@ -766,9 +776,11 @@ static void adv_slow_work_fn(struct k_work *work)
 {
 	ARG_UNUSED(work);
 	LOG_INF("fast adv window expired, switching to slow interval");
-	bt_le_adv_stop();
 	fast_adv_active = false;
+	adv_stop_for_interval_change = true;  /* suppress recycled() restart */
+	bt_le_adv_stop();
 	start_adv();
+	/* adv_stop_for_interval_change cleared by recycled() on the work queue */
 }
 
 static void start_adv(void)

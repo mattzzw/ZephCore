@@ -48,7 +48,7 @@ zephcore/
 │   ├── Packet.cpp          # Packet serialization, hash, wire format
 │   ├── Identity.cpp        # Ed25519 key management, ECDH shared secrets
 │   ├── Utils.cpp           # AES-ECB encrypt, HMAC-SHA256, MAC
-│   ├── StaticPoolPacketManager.cpp  # Fixed-size packet pool (24 slots)
+│   ├── StaticPoolPacketManager.cpp  # Fixed-size packet pool (32 slots)
 │   ├── main_companion.cpp  # Companion mode entry point + event loop
 │   └── main_repeater.cpp   # Repeater mode entry point + event loop
 │
@@ -155,7 +155,7 @@ zephcore/
 
 ### 4.1 Packet Lifecycle
 
-1. **Allocation**: `StaticPoolPacketManager::allocNew()` — fixed pool of 24 `Packet` objects (no heap)
+1. **Allocation**: `StaticPoolPacketManager::allocNew()` — fixed pool of 32 `Packet` objects (no heap)
 2. **Creation**: `Mesh::createDatagram()`, `createAdvert()`, `createAck()`, etc.
 3. **Queuing**: `Dispatcher::sendPacket()` → `PacketManager::queueOutbound()` with priority + scheduled time
 4. **Transmission**: `Dispatcher::checkSend()` → CAD check → serialize → `radio->startSendRaw()`
