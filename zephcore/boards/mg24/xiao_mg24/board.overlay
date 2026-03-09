@@ -21,10 +21,6 @@
 		lora0 = &lora;
 	};
 
-	chosen {
-		zephyr,settings-partition = &storage_partition;
-	};
-
 	/* No battery voltage divider on this board — disable ADC battery reading */
 	/delete-node/ zephyr,user;
 };
@@ -76,8 +72,7 @@
  *
  * 0x00000 - 0x0C000   (48KB)   MCUboot (reserved)
  * 0x0C000 - 0x15C000  (1344KB) Application (slot0 — expanded into slot1 space)
- * 0x15C000 - 0x160000 (16KB)   NVS storage (BLE bonds) — 2 sectors × 8KB
- * 0x160000 - 0x180000 (128KB)  LittleFS (identity, contacts, channels)
+ * 0x15C000 - 0x180000 (144KB)  LittleFS (identity, contacts, channels, BLE bonds)
  */
 /delete-node/ &slot0_partition;
 /delete-node/ &slot1_partition;
@@ -91,16 +86,10 @@
 			reg = <0x0C000 0x150000>;  /* 1344KB */
 		};
 
-		/* NVS 16KB for BLE bonds + settings (2 × 8KB sectors) */
-		storage_partition: partition@15c000 {
-			label = "storage";
-			reg = <0x15C000 0x4000>;
-		};
-
-		/* LittleFS 128KB for DataStore */
-		lfs_partition: partition@160000 {
+		/* LittleFS 144KB for DataStore + file-based BLE settings */
+		lfs_partition: partition@15c000 {
 			label = "lfs";
-			reg = <0x160000 0x20000>;
+			reg = <0x15C000 0x24000>;
 		};
 	};
 };
