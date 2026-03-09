@@ -2,7 +2,13 @@
  * SPDX-License-Identifier: Apache-2.0
  * ZephCore BLE Adapter — NUS service, advertising, security, TX/RX
  *
- * Extracted from main_companion.cpp for independent BLE debug logging.
+ * Security: SMP pairing with SC + MITM + Bonding, DisplayOnly IO (app_passkey).
+ * Pairing is triggered reactively by ATT_ERR_AUTHENTICATION on secured GATT
+ * attributes (Apple §55 compliant — no proactive Security Request on connect).
+ *
+ * Advertising: Public identity address (CONFIG_BT_PRIVACY disabled).
+ * Android's Flutter BLE plugin fails to connectGatt() to RPA-advertised devices
+ * from app context.  Arduino MeshCore also uses public addresses.
  */
 
 #include <stdio.h>
@@ -154,8 +160,8 @@ static void kick_tx_drain(void);
  * Matches Arduino's SECMODE_ENC_WITH_MITM on bleuart.
  *
  * When the phone tries to subscribe (CCC write) or send data (RX write),
- * Zephyr returns ATT_ERR_AUTHENTICATION. The phone's BLE stack should
- * then initiate pairing (PIN dialog). After pairing succeeds,
+ * Zephyr returns ATT_ERR_AUTHENTICATION. The phone's BLE stack then
+ * initiates pairing (PIN dialog). After pairing succeeds,
  * security_changed() fires at L3+ and the phone retries the operation.
  */
 BT_GATT_SERVICE_DEFINE(secure_nus_svc,
@@ -286,25 +292,13 @@ static void connected(struct bt_conn *conn, uint8_t err)
 
 	/* Do NOT proactively request security here.
 	 *
-	 * Arduino reference: the SoftDevice never sends SMP Security Request
-	 * on connection. Pairing is triggered naturally when the phone tries
-	 * to access a GATT characteristic with AUTHEN permissions — the stack
-	 * returns "Insufficient Authentication" and the phone's BLE stack
-	 * initiates pairing (PIN dialog).
-	 *
-	 * Our NUS service has BT_GATT_PERM_*_AUTHEN on CCC and RX, so
-	 * pairing triggers automatically when the MeshCore app accesses them.
-	 *
-	 * The old bt_conn_set_security(L3) call sent a proactive SMP Security
-	 * Request that the MeshCore app doesn't handle — phone would connect
-	 * but never show a PIN dialog, causing a "freeze."
+	 * Apple Accessory Design Guidelines §55 (Pairing): the accessory should
+	 * not request pairing until an ATT request is rejected with "Insufficient
+	 * Authentication."  Pairing is triggered reactively when the phone tries
+	 * to access our AUTHEN-secured GATT attributes (CCC write / RX write).
 	 *
 	 * For bonded reconnects, Zephyr auto-encrypts with stored keys when
-	 * CONFIG_BT_SMP and CONFIG_BT_BONDABLE are enabled.
-	 *
-	 * NOTE: If Windows support is needed later, Windows may not initiate
-	 * pairing from "Insufficient Authentication" — add a platform-specific
-	 * Security Request path for Windows clients only. */
+	 * CONFIG_BT_SMP and CONFIG_BT_BONDABLE are enabled. */
 
 	/* Notify main of BLE connection */
 	if (ble_cbs && ble_cbs->on_connected) {

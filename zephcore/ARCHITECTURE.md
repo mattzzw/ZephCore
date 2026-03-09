@@ -348,12 +348,17 @@ Power: `powersaving on/off`
 
 ### 7.1 BLE (`adapters/ble/`)
 
-- Nordic UART Service (NUS) with AUTHEN permissions (forces pairing)
-- Passkey-based MITM pairing, runtime configurable PIN
+- Nordic UART Service (NUS) with AUTHEN permissions on CCC + RX (forces pairing)
+- Passkey-based MITM pairing (SC + MITM + Bonding), runtime configurable PIN via `app_passkey` callback
+- DisplayOnly IO capability — phone enters passkey displayed on device / known to user
+- Advertising with public identity address (no RPA) — required for Android Flutter BLE app compatibility
+- `CONFIG_BT_PRIVACY` disabled: Android's Flutter BLE plugin fails to `connectGatt()` to RPA-advertised devices from app context; iOS and Android system BT settings handle RPA fine but the MeshCore app doesn't. Arduino MeshCore also uses public addresses.
+- Pairing triggered reactively: phone hits ATT error 0x05 on secured attribute → initiates SMP pairing (Apple Accessory Design Guidelines §55 compliant — no proactive Security Request)
 - TX congestion control: queue (12 frames) + overflow buffer + retry + timeout watchdog
 - Fast/slow advertising switching with post-disconnect flap prevention
 - DLE (Data Length Extension) to 251 bytes
 - Interface coexistence: BLE vs USB, one active at a time
+- Debug: `boards/common/ble_debug.conf` overlay enables DBG on bt_smp/att/gatt/conn
 
 ### 7.2 DataStore (`adapters/datastore/`)
 
