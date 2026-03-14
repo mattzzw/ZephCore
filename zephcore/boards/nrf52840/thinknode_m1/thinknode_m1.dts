@@ -11,7 +11,7 @@
  * - MX25R1635F 2MB QSPI flash
  * - GPS module on UART0 (9600 baud, multi-constellation)
  * - 1200 mAh battery with ADC on AIN2 (150K+150K divider)
- * - Buzzer on PWM0, two user buttons, GPS hardware switch
+ * - Buzzer on PWM0, user button (P1.10), page button (P1.07), GPS hardware switch
  * - LEDs: GREEN=P1.04, BLUE=P0.14 (RED=P1.06 shared with display SPI)
  *
  * Pin conflicts (shared by hardware design):
@@ -79,38 +79,30 @@
 	buttons: buttons {
 		compatible = "gpio-keys";
 
+		/* Action / enter button (P1.10) — KEY_ENTER direct, no filter.
+		 * action_page_enter() handles double-press confirmation internally. */
 		user_button: button_0 {
 			gpios = <&gpio1 10 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
-			zephyr,code = <INPUT_KEY_0>;
+			zephyr,code = <INPUT_KEY_ENTER>;
 			label = "User Button";
 		};
 
+		/* Page turn button (P1.07) — raw KEY_0, consumed by multi-tap below.
+		 * (P1.07 is shared with SPI1 MISO — safe because EPD is write-only.) */
 		page_button: button_1 {
-			gpios = <&gpio0 11 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
-			zephyr,code = <INPUT_KEY_1>;
+			gpios = <&gpio1 7 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_0>;
 			label = "Page Button";
 		};
 	};
 
-	/* Input filter: user button long-press (1000ms) */
-	user_btn_longpress {
-		compatible = "zephyr,input-longpress";
-		input = <&buttons>;
-		input-codes = <INPUT_KEY_0>;
-		short-codes = <INPUT_KEY_A>;
-		long-codes = <INPUT_KEY_POWER>;
-		long-delay-ms = <1000>;
-	};
-
-	/* Input filter: user button multi-tap
-	 * 1 tap  → KEY_1 = next page on EPD
-	 * 2 taps → KEY_B = flood advert
-	 * 3 taps → KEY_D = buzzer mute toggle
-	 * 4 taps → KEY_C = GPS on/off */
-	user_btn_multitap {
+	/* Input filter: page button multi-tap
+	 * 1 tap  → KEY_1     = next page
+	 * 2 taps → KEY_LEFT  = previous page */
+	page_btn_multitap {
 		compatible = "zephcore,input-multi-tap";
-		input-codes = <INPUT_KEY_A>;
-		tap-codes = <INPUT_KEY_1 INPUT_KEY_B INPUT_KEY_D INPUT_KEY_C>;
+		input-codes = <INPUT_KEY_0>;
+		tap-codes = <INPUT_KEY_1 INPUT_KEY_LEFT>;
 		tap-delay-ms = <400>;
 	};
 
@@ -146,7 +138,7 @@
 	 * Physical toggle switch on the board.
 	 * HIGH = GPS ON, LOW = GPS OFF.
 	 * Separate from the buttons node so it doesn't feed
-	 * the longpress/multi-tap filter chain. */
+	 * the page button multi-tap filter. */
 	gps_switch: gps-switch {
 		compatible = "gpio-keys";
 		gps_sw: gps_sw {
@@ -209,7 +201,7 @@
 			reg = <0>;
 			width = <200>;
 			height = <200>;
-			rotation = <0>;
+			rotation = <270>;
 			busy-gpios = <&gpio0 3 GPIO_ACTIVE_HIGH>;
 
 			/* Use internal temperature sensor for OTP waveform selection. */

@@ -590,24 +590,13 @@ Over USB CDC: V3 framing: `[2B LE length] [1B opcode] [payload...]`
 | `/lfs/repeater/regions2` | Region map | Header + 164B × N entries |
 | `/lfs/settings/` | BLE bonds + Zephyr settings | File-based settings (all platforms) |
 
-### Preferences Binary Layout (93 bytes)
+### Preferences Binary Layout (292 bytes)
 
-```
-Offset  Size  Field
-0       4     airtime_factor (float)
-4       32    node_name
-36      4     (padding)
-40      8     node_lat (double)
-48      8     node_lon (double)
-56      4     freq (float)
-60      1     sf
-61      1     cr
-62      1     client_repeat
-63      1     manual_add_contacts
-64      4     bw (float)
-...     ...   (see CommonCLI.cpp loadPrefs/savePrefs for full layout)
-92      1     rx_boost (ZephCore extension)
-```
+Field-by-field serialization (NOT raw struct dump). See `memory/prefs-format.md` for full layout,
+or `zephcore/helpers/CommonCLI.cpp` `loadPrefs()` for the authoritative source.
+
+Key ranges: name(4-36), radio(72-119), adaptive-delay(80-111, ignored at runtime),
+Arduino-bridge(127-151, read+discarded), GPS(156-161), owner_info(170-290), rx_boost/duty(290-291).
 
 ---
 

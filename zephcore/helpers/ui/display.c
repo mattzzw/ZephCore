@@ -51,14 +51,17 @@ static const struct device *backlight_reg =
 static const struct device *backlight_reg;
 #endif
 
+static bool backlight_on;
+
 static inline void backlight_set(bool on)
 {
-	if (backlight_reg && device_is_ready(backlight_reg)) {
+	if (backlight_reg && device_is_ready(backlight_reg) && on != backlight_on) {
 		if (on) {
 			regulator_enable(backlight_reg);
 		} else {
 			regulator_disable(backlight_reg);
 		}
+		backlight_on = on;
 	}
 }
 
@@ -220,8 +223,9 @@ int mc_display_init(void)
 	disp_on = true;
 	disp_initialized = true;
 
-	/* Set up auto-off timer */
+	/* Set up auto-off timer and schedule initial timeout */
 	k_work_init_delayable(&auto_off_work, auto_off_handler);
+	mc_display_reset_auto_off();
 
 	LOG_INF("display initialized (%ux%u, font %ux%u)",
 		disp_width, disp_height, font_w, font_h);
