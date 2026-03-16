@@ -48,6 +48,10 @@
 #include <zephyr/sys/poweroff.h>
 #endif
 
+#if defined(CONFIG_SOC_FAMILY_NORDIC_NRF)
+#include <hal/nrf_gpio.h>
+#endif
+
 #include <zephyr/sys/reboot.h>
 
 /* GPS control (extern "C" in ZephyrSensorManager.h) */
@@ -577,8 +581,47 @@ static void action_deep_sleep(void)
 	gps_power_off_for_shutdown();
 	mesh_disable_power_regulators();
 
-	/* 5. Enter System OFF.
-	 * Wake via reset button → full chip reset → clean boot. */
+	/* 5. Configure GPIO SENSE for button wakeup, then enter System OFF.
+	 *
+	 * The nRF GPIO driver does not implement GPIO_INT_WAKEUP, so the
+	 * wakeup-source DTS property has no effect on nRF52. We must set
+	 * SENSE bits directly via the nRF HAL. sys_poweroff() goes straight
+	 * to nrf_power_system_off() with no device PM suspend, so these bits
+	 * persist into System OFF and trigger a reset on next button press.
+	 *
+	 * Wait for button release first: if we enter System OFF while the
+	 * button is still held (long-press shutdown), DETECT is already
+	 * asserted and the chip cannot enter System OFF cleanly. */
+#if defined(CONFIG_SOC_FAMILY_NORDIC_NRF) && DT_NODE_EXISTS(DT_ALIAS(sw0))
+	{
+#define _SW0_NODE  DT_ALIAS(sw0)
+#define _SW0_PORT  DT_PROP(DT_GPIO_CTLR(_SW0_NODE, gpios), port)
+#define _SW0_PIN   DT_GPIO_PIN(_SW0_NODE, gpios)
+#define _SW0_FLAGS DT_GPIO_FLAGS(_SW0_NODE, gpios)
+
+		static const struct gpio_dt_spec sw0 =
+			GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
+		gpio_pin_configure_dt(&sw0, GPIO_INPUT);
+
+		int64_t deadline = k_uptime_get() + 5000;
+		while (gpio_pin_get_dt(&sw0) && k_uptime_get() < deadline) {
+			k_sleep(K_MSEC(10));
+		}
+
+		nrf_gpio_cfg_sense_input(
+			NRF_GPIO_PIN_MAP(_SW0_PORT, _SW0_PIN),
+			(_SW0_FLAGS & GPIO_PULL_UP)   ? NRF_GPIO_PIN_PULLUP   :
+			(_SW0_FLAGS & GPIO_PULL_DOWN) ? NRF_GPIO_PIN_PULLDOWN :
+			                               NRF_GPIO_PIN_NOPULL,
+			(_SW0_FLAGS & GPIO_ACTIVE_LOW) ? NRF_GPIO_PIN_SENSE_LOW
+			                               : NRF_GPIO_PIN_SENSE_HIGH);
+#undef _SW0_NODE
+#undef _SW0_PORT
+#undef _SW0_PIN
+#undef _SW0_FLAGS
+	}
+#endif /* CONFIG_SOC_FAMILY_NORDIC_NRF && sw0 */
+
 	LOG_INF("deep sleep: entering System OFF");
 	sys_poweroff();
 	CODE_UNREACHABLE;
