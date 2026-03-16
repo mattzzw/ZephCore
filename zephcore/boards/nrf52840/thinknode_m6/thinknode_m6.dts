@@ -81,11 +81,12 @@
 	 * 1 tap  → KEY_1 = page next
 	 * 2 taps → KEY_B = flood advert
 	 * 3 taps → KEY_D = buzzer mute toggle
-	 * 4 taps → KEY_C = GPS on/off */
+	 * 4 taps → KEY_C = GPS on/off
+	 * 5 taps → KEY_E = LED heartbeat toggle */
 	user_btn_multitap {
 		compatible = "zephcore,input-multi-tap";
 		input-codes = <INPUT_KEY_A>;
-		tap-codes = <INPUT_KEY_1 INPUT_KEY_B INPUT_KEY_D INPUT_KEY_C>;
+		tap-codes = <INPUT_KEY_1 INPUT_KEY_B INPUT_KEY_D INPUT_KEY_C INPUT_KEY_E>;
 		tap-delay-ms = <400>;
 	};
 
@@ -323,3 +324,4 @@ zephyr_udc0: &usbd {
 
 /* External QSPI /ext automount */
 #include "../../common/qspi-ext.dtsi"
+#include "../../common/nrf52_wakeup.dtsi"

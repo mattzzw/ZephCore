@@ -659,6 +659,8 @@
  * / {
  *     buttons: buttons {
  *         compatible = "gpio-keys";
+ *         /* nRF52 only: omit wakeup-source here; use the common include below instead.
+ *          * Other platforms: add wakeup-source; directly if the driver supports it. */
  *         user_button: button_0 {
  *             gpios = <&gpio0 8 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
  *             zephyr,code = <INPUT_KEY_0>;
@@ -669,18 +671,29 @@
  *         compatible = "zephyr,input-longpress";
  *         input = <&buttons>;
  *         input-codes = <INPUT_KEY_0>;
- *         short-codes = <INPUT_KEY_A>;
- *         long-codes = <INPUT_KEY_POWER>;
+ *         short-codes = <INPUT_KEY_A>;        /* short press → multi-tap input */
+ *         long-codes = <INPUT_KEY_POWER>;     /* long press (≥1s) → deep sleep */
  *         long-delay-ms = <1000>;
  *     };
  *
+ *     /* Multi-tap action mapping (standard ZephCore assignment):
+ *      *   1 tap  (400ms wait) → KEY_1 = page next
+ *      *   2 taps (400ms wait) → KEY_B = flood advert
+ *      *   3 taps (400ms wait) → KEY_D = buzzer mute toggle
+ *      *   4 taps (400ms wait) → KEY_C = GPS on/off
+ *      *   5 taps (immediate)  → KEY_E = LED heartbeat toggle */
  *     user_btn_multitap {
  *         compatible = "zephcore,input-multi-tap";
  *         input-codes = <INPUT_KEY_A>;
- *         tap-codes = <INPUT_KEY_1 INPUT_KEY_B INPUT_KEY_D INPUT_KEY_C>;
+ *         tap-codes = <INPUT_KEY_1 INPUT_KEY_B INPUT_KEY_D INPUT_KEY_C INPUT_KEY_E>;
  *         tap-delay-ms = <400>;
  *     };
  * };
+ *
+ * /* nRF52 boards: add this at the END of the DTS file so the button GPIO
+ *  * is configured for System OFF wakeup (press button to boot after shutdown).
+ *  * Do NOT add for boards without a 'buttons' label (ikoka_nano, rak4631). */
+ * #include "../../common/nrf52_wakeup.dtsi"
  */
 
 /* --- GPS on UART (nRF52840 typically on &uart0) ---

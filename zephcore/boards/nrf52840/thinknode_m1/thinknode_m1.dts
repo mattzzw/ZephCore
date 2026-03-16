@@ -389,3 +389,4 @@ zephyr_udc0: &usbd {
 
 /* ---- External QSPI /ext automount ---- */
 #include "../../common/qspi-ext.dtsi"
+#include "../../common/nrf52_wakeup.dtsi"

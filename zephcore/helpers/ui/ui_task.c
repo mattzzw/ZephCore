@@ -76,6 +76,9 @@ LOG_MODULE_REGISTER(ui_task, CONFIG_ZEPHCORE_BOARD_LOG_LEVEL);
 #define MELODY_GPS_ON     "gon:d=16,o=7,b=200:c,p,c,p,c,p,c,p,p,8e"
 #define MELODY_GPS_OFF    "gof:d=16,o=7,b=200:c,p,c,p,c,p,c,p,p,8g5"
 
+#define MELODY_LED_ON     "lon:d=16,o=7,b=200:c,p,c,p,c,p,c,p,c,p,p,8e"
+#define MELODY_LED_OFF    "lof:d=16,o=7,b=200:c,p,c,p,c,p,c,p,c,p,p,8g5"
+
 /* ========== LED Heartbeat ========== */
 /* Match Arduino: 4s cycle, 20ms pulse (normal) or 200ms (unread messages).
  * Uses led0 or led1 alias — whichever exists in the board's DTS.
@@ -475,6 +478,9 @@ static void action_leds_toggle(void)
 	s->leds_disabled = new_disabled;
 	ui_set_heartbeat_led(!new_disabled);
 	mesh_set_leds_disabled(new_disabled);
+#ifdef CONFIG_ZEPHCORE_UI_BUZZER
+	buzzer_play(new_disabled ? MELODY_LED_OFF : MELODY_LED_ON);
+#endif
 	LOG_INF("LEDs %s (user toggle)", new_disabled ? "disabled" : "enabled");
 	schedule_render();
 }
@@ -698,8 +704,13 @@ static void ui_input_cb(struct input_event *evt, void *user_data)
 		break;
 
 	case INPUT_KEY_C:
-		/* Quadruple tap (immediate): toggle GPS */
+		/* Quadruple tap (400ms delayed): toggle GPS */
 		action_gps_toggle();
+		break;
+
+	case INPUT_KEY_E:
+		/* Quintuple tap (immediate): toggle LED heartbeat */
+		action_leds_toggle();
 		break;
 
 	/* ===== Longpress output ===== */

@@ -157,6 +157,21 @@ If you write a fully custom DTS that includes neither, add it yourself:
     };
 
 
+**nRF52 boards with a user button: button wakeup from System OFF**
+
+`sys_poweroff()` on nRF52840 enters System OFF (~1µA). To allow waking via
+button press (instead of only via USB/charger), GPIO SENSE bits must be set
+before poweroff. This is done via the `wakeup-source` property on the
+`gpio-keys` node, which the nRF52 GPIO driver handles automatically.
+
+Boards that define a `buttons:` gpio-keys node must add at the END of their DTS:
+
+    #include "../../common/nrf52_wakeup.dtsi"
+
+Boards WITHOUT a `buttons` label (ikoka_nano, rak4631) must NOT include it —
+referencing an undefined `&buttons` label is a hard build error.
+
+
 What Goes in board.conf
 -----------------------
 

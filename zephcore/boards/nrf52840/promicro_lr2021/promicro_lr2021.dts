@@ -203,3 +203,4 @@ zephyr_udc0: &usbd {
 
 /* ---- Flash partitions (SoftDevice v6, app@0x26000) ---- */
 #include "../../common/nrf52_partitions_sdv6.dtsi"
+#include "../../common/nrf52_wakeup.dtsi"

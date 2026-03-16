@@ -1,0 +1,18 @@
+/*
+ * Common: configure the 'buttons' gpio-keys node as a wakeup source.
+ *
+ * On nRF52840, sys_poweroff() enters System OFF (~1µA). Waking via the user
+ * button requires GPIO SENSE bits to be set before poweroff. Zephyr's gpio-keys
+ * driver adds GPIO_INT_WAKEUP to the interrupt flags when wakeup-source is set,
+ * which causes the nRF52 GPIO driver to call nrf_gpio_cfg_sense_set(). Those
+ * SENSE bits persist through System OFF and trigger a reset on button press.
+ *
+ * Include this in any nRF52 board DTS that defines a 'buttons' gpio-keys node.
+ * Boards without buttons (e.g. ikoka_nano, rak4631) should NOT include this.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+&buttons {
+	wakeup-source;
+};
