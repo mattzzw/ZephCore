@@ -34,19 +34,39 @@ cmake_minimum_required(VERSION 3.20.0)
 function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
     file(GLOB PATCH_FILES "${PATCH_DIR}/*.patch")
     list(SORT PATCH_FILES)
+    if(NOT PATCH_FILES)
+        return()
+    endif()
+    # Stamp-based idempotency: hash of (patch contents + target git HEAD).
+    # If the stamp matches we already applied these exact patches to this exact
+    # tree state — skip.  A per-patch git apply --reverse --check fails for
+    # chained patches that touch the same file (N's reverse can't apply once
+    # N+1 is also present), so reverse-checking is not reliable here.
+    execute_process(
+        COMMAND git rev-parse HEAD
+        WORKING_DIRECTORY "${TARGET_DIR}"
+        OUTPUT_VARIABLE _target_head
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    set(_hash_input "${_target_head}")
+    foreach(_pf ${PATCH_FILES})
+        file(MD5 "${_pf}" _h)
+        string(APPEND _hash_input "${_h}")
+    endforeach()
+    string(MD5 _stamp_hash "${_hash_input}")
+    set(_stamp "${TARGET_DIR}/.zephcore_${LABEL}.stamp")
+    if(EXISTS "${_stamp}")
+        file(READ "${_stamp}" _existing_hash)
+        string(STRIP "${_existing_hash}" _existing_hash)
+        if(_existing_hash STREQUAL _stamp_hash)
+            message(STATUS "  [${LABEL}] Patches already applied, skipping.")
+            return()
+        endif()
+        message(STATUS "  [${LABEL}] Patch set changed, re-applying...")
+    endif()
     foreach(PATCH_FILE ${PATCH_FILES})
         get_filename_component(PATCH_NAME ${PATCH_FILE} NAME)
-        # Check if already applied (idempotent for re-configure without west update)
-        execute_process(
-            COMMAND git apply --reverse --check "${PATCH_FILE}"
-            WORKING_DIRECTORY "${TARGET_DIR}"
-            RESULT_VARIABLE ALREADY_APPLIED
-            OUTPUT_QUIET ERROR_QUIET
-        )
-        if(ALREADY_APPLIED EQUAL 0)
-            message(STATUS "  [${LABEL}] Already applied: ${PATCH_NAME}")
-            continue()
-        endif()
         # Verify patch applies cleanly
         execute_process(
             COMMAND git apply --check "${PATCH_FILE}"
@@ -59,14 +79,10 @@ function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
         # the file list from the patch and git-checkout those paths to
         # restore them to the clean upstream state, then re-check.
         if(NOT PATCH_CHECK EQUAL 0)
-            execute_process(
-                COMMAND git diff --name-only "${PATCH_FILE}"
-                WORKING_DIRECTORY "${TARGET_DIR}"
-                OUTPUT_VARIABLE _dummy ERROR_QUIET
-            )
             # git apply --numstat lists affected files (one per line)
             execute_process(
                 COMMAND git apply --numstat "${PATCH_FILE}"
+                WORKING_DIRECTORY "${TARGET_DIR}"
                 OUTPUT_VARIABLE PATCH_NUMSTAT
                 ERROR_QUIET
             )
@@ -116,6 +132,7 @@ function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
         endif()
         message(STATUS "  [${LABEL}] Applied: ${PATCH_NAME}")
     endforeach()
+    file(WRITE "${_stamp}" "${_stamp_hash}")
 endfunction()
 
 # Resolve target directories (before find_package(Zephyr) sets ZEPHYR_BASE)
