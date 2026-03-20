@@ -64,7 +64,7 @@ private:
 	static constexpr int EMA_SHIFT = 3;          /* alpha = 1/8 */
 	static constexpr int WARMUP_PACKETS = 4;
 	static constexpr float MIN_FLOOD_FACTOR = 0.05f;
-	static constexpr float FLOOD_SCALE = 0.116f; /* (0.5 - 0.05) / sqrt(15) */
+	static constexpr float FLOOD_SCALE = 0.170f; /* (0.5 - 0.05) / sqrt(15) */
 	static constexpr float MAX_FLOOD_FACTOR = 2.0f;
 	static constexpr float DEFAULT_BACKOFF_MULT = 0.5f;
 	static constexpr uint32_t REACTIVE_HARD_CAP_MS = 2000;
