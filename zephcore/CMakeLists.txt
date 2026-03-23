@@ -347,6 +347,11 @@ message(STATUS "  Board overlay: ${ZEPHCORE_BOARD_OVERLAY}")
 message(STATUS "  EXTRA_CONF_FILE: ${EXTRA_CONF_FILE}")
 message(STATUS "  EXTRA_DTC_OVERLAY_FILE: ${EXTRA_DTC_OVERLAY_FILE}")
 
+# Upstream mbedTLS 4.x has unused-parameter warnings in ssl_misc.h / md.c that
+# fail with -Werror. Disable fatal warnings for the vendored mbedtls build.
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+set(TF_PSA_CRYPTO_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(zephcore)
 

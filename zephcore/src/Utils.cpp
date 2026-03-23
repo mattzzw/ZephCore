@@ -1,12 +1,10 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * ZephCore Utils - mbedTLS backend for AES-ECB, SHA256, HMAC
+ * ZephCore Utils - PSA Crypto backend for AES-ECB, SHA256, HMAC
  */
 
 #include <mesh/Utils.h>
-#include <mbedtls/aes.h>
-#include <mbedtls/sha256.h>
-#include <mbedtls/md.h>
+#include <psa/crypto.h>
 #include <string.h>
 
 #include <zephyr/logging/log.h>
@@ -25,86 +23,87 @@ static uint8_t hexVal(char c)
 void Utils::sha256(uint8_t *hash, size_t hash_len, const uint8_t *msg, int msg_len)
 {
 	uint8_t full_hash[32];
-	mbedtls_sha256(msg, (size_t)msg_len, full_hash, 0);
+	size_t out_len;
+	psa_status_t status = psa_hash_compute(PSA_ALG_SHA_256, msg, (size_t)msg_len,
+	                                       full_hash, sizeof(full_hash), &out_len);
+	if (status != PSA_SUCCESS) {
+		LOG_ERR("psa_hash_compute failed: %d", (int)status);
+		memset(hash, 0, hash_len);
+		return;
+	}
 	size_t copy_len = (hash_len < 32) ? hash_len : 32;
 	memcpy(hash, full_hash, copy_len);
 }
 
 void Utils::sha256(uint8_t *hash, size_t hash_len, const uint8_t *frag1, int frag1_len, const uint8_t *frag2, int frag2_len)
 {
-	mbedtls_sha256_context ctx;
-	mbedtls_sha256_init(&ctx);
-	mbedtls_sha256_starts(&ctx, 0);
-	mbedtls_sha256_update(&ctx, frag1, (size_t)frag1_len);
-	mbedtls_sha256_update(&ctx, frag2, (size_t)frag2_len);
-	uint8_t full_hash[32];
-	mbedtls_sha256_finish(&ctx, full_hash);
-	mbedtls_sha256_free(&ctx);
-	size_t copy_len = (hash_len < 32) ? hash_len : 32;
-	memcpy(hash, full_hash, copy_len);
+	psa_hash_operation_t op = PSA_HASH_OPERATION_INIT;
+	psa_status_t status;
+
+	status = psa_hash_setup(&op, PSA_ALG_SHA_256);
+	if (status != PSA_SUCCESS) goto fail;
+
+	status = psa_hash_update(&op, frag1, (size_t)frag1_len);
+	if (status != PSA_SUCCESS) goto fail;
+
+	status = psa_hash_update(&op, frag2, (size_t)frag2_len);
+	if (status != PSA_SUCCESS) goto fail;
+
+	{
+		uint8_t full_hash[32];
+		size_t out_len;
+		status = psa_hash_finish(&op, full_hash, sizeof(full_hash), &out_len);
+		if (status != PSA_SUCCESS) goto fail;
+		size_t copy_len = (hash_len < 32) ? hash_len : 32;
+		memcpy(hash, full_hash, copy_len);
+	}
+	return;
+
+fail:
+	LOG_ERR("sha256 (2-frag) failed: %d", (int)status);
+	psa_hash_abort(&op);
+	memset(hash, 0, hash_len);
 }
 
-/* AES-ECB using mbedTLS low-level API (PSA doesn't support ECB mode) */
-static int aes_ecb_encrypt(const uint8_t *key, size_t key_len, const uint8_t *src, int src_len, uint8_t *dest)
+/* AES-ECB using PSA Crypto (ECB_NO_PADDING) */
+static int aes_ecb_crypt(const uint8_t *key, size_t key_len, const uint8_t *src, int src_len,
+                         uint8_t *dest, bool encrypt)
 {
 	if (src_len % 16 != 0) {
 		LOG_ERR("src_len=%d not multiple of 16", src_len);
 		return -1;
 	}
 
-	mbedtls_aes_context ctx;
-	mbedtls_aes_init(&ctx);
+	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+	psa_set_key_type(&attr, PSA_KEY_TYPE_AES);
+	psa_set_key_bits(&attr, key_len * 8);
+	psa_set_key_usage_flags(&attr, encrypt ? PSA_KEY_USAGE_ENCRYPT : PSA_KEY_USAGE_DECRYPT);
+	psa_set_key_algorithm(&attr, PSA_ALG_ECB_NO_PADDING);
 
-	int ret = mbedtls_aes_setkey_enc(&ctx, key, key_len * 8);
-	if (ret != 0) {
-		LOG_ERR("setkey failed: %d", ret);
-		mbedtls_aes_free(&ctx);
+	psa_key_id_t key_id;
+	psa_status_t status = psa_import_key(&attr, key, key_len, &key_id);
+	if (status != PSA_SUCCESS) {
+		LOG_ERR("psa_import_key failed: %d", (int)status);
 		return -1;
 	}
 
-	/* Encrypt each 16-byte block */
-	for (int i = 0; i < src_len; i += 16) {
-		ret = mbedtls_aes_crypt_ecb(&ctx, MBEDTLS_AES_ENCRYPT, src + i, dest + i);
-		if (ret != 0) {
-			LOG_ERR("crypt_ecb failed at block %d: %d", i/16, ret);
-			mbedtls_aes_free(&ctx);
-			return -1;
-		}
+	size_t out_len;
+	if (encrypt) {
+		status = psa_cipher_encrypt(key_id, PSA_ALG_ECB_NO_PADDING,
+		                            src, (size_t)src_len, dest, (size_t)src_len, &out_len);
+	} else {
+		status = psa_cipher_decrypt(key_id, PSA_ALG_ECB_NO_PADDING,
+		                            src, (size_t)src_len, dest, (size_t)src_len, &out_len);
 	}
 
-	mbedtls_aes_free(&ctx);
-	return src_len;
-}
+	psa_destroy_key(key_id);
 
-static int aes_ecb_decrypt(const uint8_t *key, size_t key_len, const uint8_t *src, int src_len, uint8_t *dest)
-{
-	if (src_len % 16 != 0) {
-		LOG_ERR("src_len=%d not multiple of 16", src_len);
+	if (status != PSA_SUCCESS) {
+		LOG_ERR("psa_cipher_%s failed: %d", encrypt ? "encrypt" : "decrypt", (int)status);
 		return -1;
 	}
 
-	mbedtls_aes_context ctx;
-	mbedtls_aes_init(&ctx);
-
-	int ret = mbedtls_aes_setkey_dec(&ctx, key, key_len * 8);
-	if (ret != 0) {
-		LOG_ERR("setkey failed: %d", ret);
-		mbedtls_aes_free(&ctx);
-		return -1;
-	}
-
-	/* Decrypt each 16-byte block */
-	for (int i = 0; i < src_len; i += 16) {
-		ret = mbedtls_aes_crypt_ecb(&ctx, MBEDTLS_AES_DECRYPT, src + i, dest + i);
-		if (ret != 0) {
-			LOG_ERR("crypt_ecb failed at block %d: %d", i/16, ret);
-			mbedtls_aes_free(&ctx);
-			return -1;
-		}
-	}
-
-	mbedtls_aes_free(&ctx);
-	return src_len;
+	return (int)out_len;
 }
 
 int Utils::encrypt(const uint8_t *shared_secret, uint8_t *dest, const uint8_t *src, int src_len)
@@ -125,29 +124,40 @@ int Utils::encrypt(const uint8_t *shared_secret, uint8_t *dest, const uint8_t *s
 		dp += CIPHER_BLOCK_SIZE;
 	}
 	int total = (int)(dp - tmp);
-	int n = aes_ecb_encrypt(shared_secret, CIPHER_KEY_SIZE, tmp, total, dest);
+	int n = aes_ecb_crypt(shared_secret, CIPHER_KEY_SIZE, tmp, total, dest, true);
 	return (n > 0) ? n : 0;
 }
 
 int Utils::decrypt(const uint8_t *shared_secret, uint8_t *dest, const uint8_t *src, int src_len)
 {
-	int n = aes_ecb_decrypt(shared_secret, CIPHER_KEY_SIZE, src, src_len, dest);
+	int n = aes_ecb_crypt(shared_secret, CIPHER_KEY_SIZE, src, src_len, dest, false);
 	return (n > 0) ? n : 0;
 }
 
-/* HMAC-SHA256 using mbedTLS */
+/* HMAC-SHA256 using PSA Crypto */
 static int compute_hmac_truncated(const uint8_t *key, size_t key_len, const uint8_t *data, size_t data_len, uint8_t *mac_out, size_t mac_len)
 {
-	uint8_t full_hmac[32];
-	const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-	if (md_info == nullptr) {
-		LOG_ERR("compute_hmac: SHA256 not available");
+	psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+	psa_set_key_type(&attr, PSA_KEY_TYPE_HMAC);
+	psa_set_key_bits(&attr, key_len * 8);
+	psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE);
+	psa_set_key_algorithm(&attr, PSA_ALG_HMAC(PSA_ALG_SHA_256));
+
+	psa_key_id_t key_id;
+	psa_status_t status = psa_import_key(&attr, key, key_len, &key_id);
+	if (status != PSA_SUCCESS) {
+		LOG_ERR("compute_hmac: import_key failed: %d", (int)status);
 		return -1;
 	}
 
-	int ret = mbedtls_md_hmac(md_info, key, key_len, data, data_len, full_hmac);
-	if (ret != 0) {
-		LOG_ERR("compute_hmac: mbedtls_md_hmac failed: %d", ret);
+	uint8_t full_hmac[32];
+	size_t out_len;
+	status = psa_mac_compute(key_id, PSA_ALG_HMAC(PSA_ALG_SHA_256),
+	                         data, data_len, full_hmac, sizeof(full_hmac), &out_len);
+	psa_destroy_key(key_id);
+
+	if (status != PSA_SUCCESS) {
+		LOG_ERR("compute_hmac: psa_mac_compute failed: %d", (int)status);
 		return -1;
 	}
 

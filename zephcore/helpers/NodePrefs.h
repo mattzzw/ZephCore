@@ -64,6 +64,8 @@ struct NodePrefs {
 	char owner_info[120];
 	uint8_t rx_boost;               // 1 = boosted RX gain (+3dB, +2mA), 0 = power save
 	uint8_t rx_duty_cycle;          // 1 = RX duty cycle (power save), 0 = continuous RX
+	uint8_t apc_enabled;            // 1 = adaptive power control on, 0 = fixed TX power
+	uint8_t apc_margin;             // APC target link margin in dB (6-30, default 16)
 
 	/* ---- Companion-only fields (Zephyr additions, not in Arduino) ---- */
 	uint8_t manual_add_contacts;
@@ -124,4 +126,6 @@ static inline void initNodePrefs(NodePrefs* prefs) {
 	prefs->adc_multiplier = 0.0f;
 	prefs->rx_boost = 1;              // Default to boosted RX for better sensitivity
 	prefs->rx_duty_cycle = 0;         // Default OFF — continuous RX for best reliability
+	prefs->apc_enabled = 0;           // Default OFF — fixed TX power
+	prefs->apc_margin = 16;           // Default 16 dB target link margin
 }

@@ -5,11 +5,10 @@
 
 #include "TransportKeyStore.h"
 #include <string.h>
-#include <mbedtls/sha256.h>
-#include <mbedtls/md.h>
+#include <psa/crypto.h>
 
 uint16_t TransportKey::calcTransportCode(const mesh::Packet* packet) const {
-    /* HMAC-SHA256 using mbedTLS */
+    /* HMAC-SHA256 using PSA Crypto */
     uint8_t hmac[32];
     uint8_t type = packet->getPayloadType();
 
@@ -19,14 +18,27 @@ uint16_t TransportKey::calcTransportCode(const mesh::Packet* packet) const {
     memcpy(&msg[1], packet->payload, packet->payload_len);
     size_t msg_len = 1 + packet->payload_len;
 
-    /* Calculate HMAC-SHA256 */
-    mbedtls_md_context_t ctx;
-    mbedtls_md_init(&ctx);
-    mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
-    mbedtls_md_hmac_starts(&ctx, key, sizeof(key));
-    mbedtls_md_hmac_update(&ctx, msg, msg_len);
-    mbedtls_md_hmac_finish(&ctx, hmac);
-    mbedtls_md_free(&ctx);
+    /* Import HMAC key */
+    psa_key_attributes_t attr = PSA_KEY_ATTRIBUTES_INIT;
+    psa_set_key_type(&attr, PSA_KEY_TYPE_HMAC);
+    psa_set_key_bits(&attr, sizeof(key) * 8);
+    psa_set_key_usage_flags(&attr, PSA_KEY_USAGE_SIGN_MESSAGE);
+    psa_set_key_algorithm(&attr, PSA_ALG_HMAC(PSA_ALG_SHA_256));
+
+    psa_key_id_t key_id;
+    psa_status_t status = psa_import_key(&attr, key, sizeof(key), &key_id);
+    if (status != PSA_SUCCESS) {
+        return 0;
+    }
+
+    size_t out_len;
+    status = psa_mac_compute(key_id, PSA_ALG_HMAC(PSA_ALG_SHA_256),
+                             msg, msg_len, hmac, sizeof(hmac), &out_len);
+    psa_destroy_key(key_id);
+
+    if (status != PSA_SUCCESS) {
+        return 0;
+    }
 
     /* Extract first 2 bytes as transport code (little-endian, matching Arduino SHA256 finalizeHMAC behavior) */
     uint16_t code = (uint16_t)hmac[0] | ((uint16_t)hmac[1] << 8);
@@ -66,7 +78,9 @@ void TransportKeyStore::getAutoKeyFor(uint16_t id, const char* name, TransportKe
 
     // calc key for publicly-known hashtag region name (SHA256 hash, first 16 bytes)
     uint8_t hash[32];
-    mbedtls_sha256((const unsigned char*)name, strlen(name), hash, 0);
+    size_t out_len;
+    psa_hash_compute(PSA_ALG_SHA_256, (const uint8_t*)name, strlen(name),
+                     hash, sizeof(hash), &out_len);
     memcpy(dest.key, hash, sizeof(dest.key));
 
     putCache(id, dest);

@@ -111,6 +111,8 @@ void CommonCLI::loadPrefs(const char* path) {
     ok = ok && prefs_read(&file, _prefs->owner_info, sizeof(_prefs->owner_info));            // 170
     ok = ok && prefs_read(&file, &_prefs->rx_boost, sizeof(_prefs->rx_boost));               // 290
     ok = ok && prefs_read(&file, &_prefs->rx_duty_cycle, sizeof(_prefs->rx_duty_cycle));     // 291
+    ok = ok && prefs_read(&file, &_prefs->apc_enabled, sizeof(_prefs->apc_enabled));         // 292
+    ok = ok && prefs_read(&file, &_prefs->apc_margin, sizeof(_prefs->apc_margin));           // 293
 
     if (!ok) {
         LOG_WRN("Prefs file %s truncated, some fields use defaults", path);
@@ -153,6 +155,8 @@ void CommonCLI::loadPrefs(const char* path) {
     _prefs->advert_loc_policy = constrain(_prefs->advert_loc_policy, (uint8_t)0, (uint8_t)2);
     _prefs->rx_boost = constrain(_prefs->rx_boost, (uint8_t)0, (uint8_t)1);
     _prefs->rx_duty_cycle = constrain(_prefs->rx_duty_cycle, (uint8_t)0, (uint8_t)1);
+    _prefs->apc_enabled = constrain(_prefs->apc_enabled, (uint8_t)0, (uint8_t)1);
+    _prefs->apc_margin = constrain(_prefs->apc_margin, (uint8_t)6, (uint8_t)30);
 
     LOG_INF("Loaded prefs from %s", path);
 }
@@ -216,6 +220,8 @@ void CommonCLI::savePrefs(const char* path) {
     fs_write(&file, _prefs->owner_info, sizeof(_prefs->owner_info));
     fs_write(&file, &_prefs->rx_boost, sizeof(_prefs->rx_boost));
     fs_write(&file, &_prefs->rx_duty_cycle, sizeof(_prefs->rx_duty_cycle));
+    fs_write(&file, &_prefs->apc_enabled, sizeof(_prefs->apc_enabled));
+    fs_write(&file, &_prefs->apc_margin, sizeof(_prefs->apc_margin));
 
     fs_close(&file);
     LOG_INF("Saved prefs to %s", path);
@@ -376,7 +382,7 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
             _callbacks->applyTempRadioParams(freq, bw, sf, cr, temp_timeout_mins);
             snprintf(reply, CLI_REPLY_SIZE, "OK - temp params for %d mins", temp_timeout_mins);
         } else {
-            strcpy(reply, "Error, invalid params");
+            strcpy(reply, "Error: freq 300-2500, bw 7-500, sf 5-12, cr 5-8, timeout>0");
         }
     } else if (memcmp(command, "password ", 9) == 0) {
         StrHelper::strncpy(_prefs->password, &command[9], sizeof(_prefs->password));
@@ -433,18 +439,6 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
                      (double)est, (double)ff);
         } else if (memcmp(config, "apc.margin", 10) == 0) {
             snprintf(reply, CLI_REPLY_SIZE, "> %d dB", (int)_callbacks->getAPCTargetMargin());
-        } else if (memcmp(config, "txpower", 7) == 0) {
-            if (_callbacks->isAPCEnabled()) {
-                int8_t apc = _callbacks->getAPCReduction();
-                float margin = _callbacks->getAPCMargin();
-                int effective = (int)_prefs->tx_power_dbm - (int)apc;
-                snprintf(reply, CLI_REPLY_SIZE, "> %ddBm (max=%d apc=-%d margin=%.1f target=%d)",
-                         effective, (int)_prefs->tx_power_dbm, (int)apc, (double)margin,
-                         (int)_callbacks->getAPCTargetMargin());
-            } else {
-                snprintf(reply, CLI_REPLY_SIZE, "> %ddBm (apc=off)",
-                         (int)_prefs->tx_power_dbm);
-            }
         } else if (memcmp(config, "flood.max", 9) == 0) {
             snprintf(reply, CLI_REPLY_SIZE, "> %u", (uint32_t)_prefs->flood_max);
         } else if (memcmp(config, "direct.txdelay", 14) == 0) {
@@ -473,7 +467,17 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
                 strcpy(reply, "> strict");
             }
         } else if (memcmp(config, "tx", 2) == 0 && (config[2] == 0 || config[2] == ' ')) {
-            snprintf(reply, CLI_REPLY_SIZE, "> %d", (int)_prefs->tx_power_dbm);
+            if (_callbacks->isAPCEnabled()) {
+                int8_t apc = _callbacks->getAPCReduction();
+                float margin = _callbacks->getAPCMargin();
+                int effective = (int)_prefs->tx_power_dbm - (int)apc;
+                snprintf(reply, CLI_REPLY_SIZE, "> %ddBm (max=%d apc=-%d margin=%.1f target=%d)",
+                         effective, (int)_prefs->tx_power_dbm, (int)apc, (double)margin,
+                         (int)_callbacks->getAPCTargetMargin());
+            } else {
+                snprintf(reply, CLI_REPLY_SIZE, "> %ddBm (apc=off)",
+                         (int)_prefs->tx_power_dbm);
+            }
         } else if (memcmp(config, "freq", 4) == 0) {
             snprintf(reply, CLI_REPLY_SIZE, "> %.3f", (double)_prefs->freq);
         } else if (memcmp(config, "public.key", 10) == 0) {
@@ -495,6 +499,10 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
             } else {
                 snprintf(reply, CLI_REPLY_SIZE, "> %.3f", (double)adc_mult);
             }
+        } else if (memcmp(config, "rxboost", 7) == 0) {
+            snprintf(reply, CLI_REPLY_SIZE, "> %d", (int)_prefs->rx_boost);
+        } else if (memcmp(config, "rxduty", 6) == 0) {
+            snprintf(reply, CLI_REPLY_SIZE, "> %d", (int)_prefs->rx_duty_cycle);
         } else {
             snprintf(reply, CLI_REPLY_SIZE, "??: %s", config);
         }
@@ -505,14 +513,17 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         const char* config = &command[4];
         if (memcmp(config, "af ", 3) == 0) {
             int val = atoi(&config[3]);
-            if (val <= 0 || val >= 100) {
+            if (val < 0 || val > 99) {
+                strcpy(reply, "Error: range 0-99 (0=unlimited)");
+            } else if (val == 0) {
                 _prefs->airtime_factor = 0.0f;
+                savePrefs();
+                strcpy(reply, "Duty Cycle set: 100% (unlimited)");
             } else {
                 _prefs->airtime_factor = (float)val;
+                savePrefs();
+                snprintf(reply, CLI_REPLY_SIZE, "Duty Cycle set: %d%%", val);
             }
-            savePrefs();
-            int dc = (_prefs->airtime_factor == 0.0f) ? 100 : (int)_prefs->airtime_factor;
-            snprintf(reply, CLI_REPLY_SIZE, "Duty Cycle set: %d%%", dc);
         } else if (memcmp(config, "int.thresh ", 11) == 0) {
             _prefs->interference_threshold = atoi(&config[11]);
             savePrefs();
@@ -522,13 +533,26 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
             savePrefs();
             snprintf(reply, CLI_REPLY_SIZE, "OK - interval rounded to %u", ((uint32_t)_prefs->agc_reset_interval) * 4);
         } else if (memcmp(config, "multi.acks ", 11) == 0) {
-            _prefs->multi_acks = atoi(&config[11]);
-            savePrefs();
-            strcpy(reply, "OK");
+            int val = atoi(&config[11]);
+            if (val == 0 || val == 1) {
+                _prefs->multi_acks = (uint8_t)val;
+                savePrefs();
+                strcpy(reply, "OK");
+            } else {
+                strcpy(reply, "Error: must be 0 or 1");
+            }
         } else if (memcmp(config, "allow.read.only ", 16) == 0) {
-            _prefs->allow_read_only = memcmp(&config[16], "on", 2) == 0;
-            savePrefs();
-            strcpy(reply, "OK");
+            if (memcmp(&config[16], "on", 2) == 0) {
+                _prefs->allow_read_only = 1;
+                savePrefs();
+                strcpy(reply, "OK");
+            } else if (memcmp(&config[16], "off", 3) == 0) {
+                _prefs->allow_read_only = 0;
+                savePrefs();
+                strcpy(reply, "OK");
+            } else {
+                strcpy(reply, "Error: must be on or off");
+            }
         } else if (memcmp(config, "flood.advert.interval ", 22) == 0) {
             int hours = _atoi(&config[22]);
             if ((hours > 0 && hours < 3) || (hours > 168)) {
@@ -571,12 +595,20 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
                 savePrefs();
                 strcpy(reply, "OK");
             } else {
-                strcpy(reply, "Error, bad chars");
+                strcpy(reply, "Error: name cannot contain [ ] \\ : , ? *");
             }
         } else if (memcmp(config, "repeat ", 7) == 0) {
-            _prefs->disable_fwd = memcmp(&config[7], "off", 3) == 0;
-            savePrefs();
-            strcpy(reply, _prefs->disable_fwd ? "OK - repeat is now OFF" : "OK - repeat is now ON");
+            if (memcmp(&config[7], "on", 2) == 0) {
+                _prefs->disable_fwd = 0;
+                savePrefs();
+                strcpy(reply, "OK - repeat is now ON");
+            } else if (memcmp(&config[7], "off", 3) == 0) {
+                _prefs->disable_fwd = 1;
+                savePrefs();
+                strcpy(reply, "OK - repeat is now OFF");
+            } else {
+                strcpy(reply, "Error: must be on or off");
+            }
         } else if (memcmp(config, "radio ", 6) == 0) {
             strcpy(tmp, &config[6]);
             const char* parts[4];
@@ -594,7 +626,7 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
                 _callbacks->savePrefs();
                 strcpy(reply, "OK - reboot to apply");
             } else {
-                strcpy(reply, "Error, invalid radio params");
+                strcpy(reply, "Error: freq 300-2500, bw 7-500, sf 5-12, cr 5-8");
             }
         } else if (memcmp(config, "lat ", 4) == 0) {
             _prefs->node_lat = atof(&config[4]);
@@ -613,13 +645,13 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
             savePrefs();
             strcpy(reply, "OK (ignored: txdelay is now adaptive)");
         } else if (memcmp(config, "flood.max ", 10) == 0) {
-            uint8_t m = atoi(&config[10]);
-            if (m <= 64) {
-                _prefs->flood_max = m;
+            int m = atoi(&config[10]);
+            if (m >= 0 && m <= 64) {
+                _prefs->flood_max = (uint8_t)m;
                 savePrefs();
                 strcpy(reply, "OK");
             } else {
-                strcpy(reply, "Error, max 64");
+                strcpy(reply, "Error: range 0-64");
             }
         } else if (memcmp(config, "direct.txdelay ", 15) == 0) {
             _prefs->direct_tx_delay_factor = atof(&config[15]);
@@ -678,34 +710,47 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         } else if (memcmp(config, "apc.margin ", 11) == 0) {
             int val = atoi(&config[11]);
             if (val >= 6 && val <= 30) {
+                _prefs->apc_margin = (uint8_t)val;
                 _callbacks->setAPCTargetMargin((uint8_t)val);
+                savePrefs();
                 snprintf(reply, CLI_REPLY_SIZE, "OK - APC target margin=%d dB", val);
             } else {
-                strcpy(reply, "Error, range 6-30 dB");
+                strcpy(reply, "Error: range 6-30 dB");
             }
         } else if (memcmp(config, "tx ", 3) == 0) {
             if (memcmp(&config[3], "apc", 3) == 0) {
+                _prefs->apc_enabled = 1;
                 _callbacks->setAPCEnabled(true);
+                savePrefs();
                 snprintf(reply, CLI_REPLY_SIZE, "OK - tx power=%d dBm (apc=on)",
                          (int)_prefs->tx_power_dbm);
             } else {
                 int val = atoi(&config[3]);
+                int max_tx = 30;
 #ifdef CONFIG_ZEPHCORE_MAX_TX_POWER_DBM
-                if (val > CONFIG_ZEPHCORE_MAX_TX_POWER_DBM) {
-                    val = CONFIG_ZEPHCORE_MAX_TX_POWER_DBM;
-                }
+                max_tx = CONFIG_ZEPHCORE_MAX_TX_POWER_DBM;
 #endif
-                _prefs->tx_power_dbm = (int8_t)val;
-                savePrefs();
-                _callbacks->setAPCEnabled(false);
-                _callbacks->setTxPower(_prefs->tx_power_dbm);
-                snprintf(reply, CLI_REPLY_SIZE, "OK - tx power=%d dBm (apc=off)",
-                         (int)_prefs->tx_power_dbm);
+                if (val < -9 || val > max_tx) {
+                    snprintf(reply, CLI_REPLY_SIZE, "Error: range -9 to %d dBm, or 'apc'", max_tx);
+                } else {
+                    _prefs->apc_enabled = 0;
+                    _prefs->tx_power_dbm = (int8_t)val;
+                    savePrefs();
+                    _callbacks->setAPCEnabled(false);
+                    _callbacks->setTxPower(_prefs->tx_power_dbm);
+                    snprintf(reply, CLI_REPLY_SIZE, "OK - tx power=%d dBm (apc=off)",
+                             (int)_prefs->tx_power_dbm);
+                }
             }
         } else if (sender_timestamp == 0 && memcmp(config, "freq ", 5) == 0) {
-            _prefs->freq = atof(&config[5]);
-            savePrefs();
-            strcpy(reply, "OK - reboot to apply");
+            float f = atof(&config[5]);
+            if (f >= 400.0f && f <= 2500.0f) {
+                _prefs->freq = f;
+                savePrefs();
+                strcpy(reply, "OK - reboot to apply");
+            } else {
+                strcpy(reply, "Error: range 400-2500 MHz");
+            }
         } else if (memcmp(config, "adc.multiplier ", 15) == 0) {
             _prefs->adc_multiplier = atof(&config[15]);
             if (_board->setAdcMultiplier(_prefs->adc_multiplier)) {
@@ -720,13 +765,23 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
                 strcpy(reply, "Error: unsupported by this board");
             }
         } else if (memcmp(config, "rxboost ", 8) == 0) {
-            _prefs->rx_boost = atoi(&config[8]) ? 1 : 0;
-            savePrefs();
-            snprintf(reply, CLI_REPLY_SIZE, "OK - rxboost=%d (reboot to apply)", _prefs->rx_boost);
-        } else if (memcmp(config, "rxboost", 7) == 0 && (config[7] == 0 || config[7] == ' ')) {
-            snprintf(reply, CLI_REPLY_SIZE, "> %d", _prefs->rx_boost);
-        } else if (memcmp(config, "rxduty", 6) == 0) {
-            snprintf(reply, CLI_REPLY_SIZE, "RX duty cycle disabled (continuous RX)");
+            int val = atoi(&config[8]);
+            if (val == 0 || val == 1) {
+                _prefs->rx_boost = (uint8_t)val;
+                savePrefs();
+                snprintf(reply, CLI_REPLY_SIZE, "OK - rxboost=%d (reboot to apply)", _prefs->rx_boost);
+            } else {
+                strcpy(reply, "Error: must be 0 or 1");
+            }
+        } else if (memcmp(config, "rxduty ", 7) == 0) {
+            int val = atoi(&config[7]);
+            if (val == 0 || val == 1) {
+                _prefs->rx_duty_cycle = (uint8_t)val;
+                savePrefs();
+                snprintf(reply, CLI_REPLY_SIZE, "OK - rxduty=%d (reboot to apply)", _prefs->rx_duty_cycle);
+            } else {
+                strcpy(reply, "Error: must be 0 or 1");
+            }
         } else {
             snprintf(reply, CLI_REPLY_SIZE, "unknown config: %s", config);
         }
@@ -831,16 +886,8 @@ void CommonCLI::handleCommand(uint32_t sender_timestamp, const char* command, ch
         } else {
             strcpy(reply, "off");
         }
-    } else if (memcmp(command, "powersaving on", 14) == 0) {
-        _prefs->powersaving_enabled = 1;
-        savePrefs();
-        strcpy(reply, "ok");
-    } else if (memcmp(command, "powersaving off", 15) == 0) {
-        _prefs->powersaving_enabled = 0;
-        savePrefs();
-        strcpy(reply, "ok");
     } else if (memcmp(command, "powersaving", 11) == 0) {
-        strcpy(reply, _prefs->powersaving_enabled ? "on" : "off");
+        strcpy(reply, "Not implemented");
     } else if (memcmp(command, "log start", 9) == 0) {
         _callbacks->setLoggingOn(true);
         strcpy(reply, "   logging on");

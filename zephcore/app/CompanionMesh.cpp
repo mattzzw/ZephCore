@@ -185,7 +185,8 @@ void CompanionMesh::begin()
 	BaseChatMesh::begin();
 #ifdef CONFIG_ZEPHCORE_APC
 	_power_ctrl.setSF(prefs.sf);
-	_power_ctrl.setTargetMargin(20);  /* companions are mobile — more conservative */
+	_power_ctrl.setTargetMargin(prefs.apc_margin);
+	_power_ctrl.setEnabled(prefs.apc_enabled != 0);
 #endif
 }
 
