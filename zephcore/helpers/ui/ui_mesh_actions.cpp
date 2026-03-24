@@ -305,6 +305,9 @@ extern "C" void mesh_housekeeping_ui_refresh(void)
 		}
 	}
 
+	/* Update offline queue message count */
+	ui_set_msg_count(s_mesh->getOfflineQueueCount());
+
 	/* Trigger display refresh */
 	ui_refresh_display();
 }

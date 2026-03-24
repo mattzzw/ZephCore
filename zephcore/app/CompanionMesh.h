@@ -110,6 +110,8 @@ public:
 	void begin();
 	void loop();
 
+	int getOfflineQueueCount() const { return _offline_queue_count; }
+
 	/**
 	 * Handle a protocol frame from BLE.
 	 * Returns true if frame was handled.

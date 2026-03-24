@@ -266,7 +266,7 @@ bool ZephyrDataStore::formatFileSystem()
 	int rc;
 
 #if FIXED_PARTITION_EXISTS(lfs_partition)
-	rc = flash_area_open(FIXED_PARTITION_ID(lfs_partition), &fap);
+	rc = flash_area_open(PARTITION_ID(lfs_partition), &fap);
 	if (rc == 0) {
 		LOG_INF("Formatting LFS partition (%u bytes)", (unsigned)fap->fa_size);
 		flash_area_flatten(fap, 0, fap->fa_size);
@@ -275,7 +275,7 @@ bool ZephyrDataStore::formatFileSystem()
 #endif
 
 #if FIXED_PARTITION_EXISTS(storage_partition)
-	rc = flash_area_open(FIXED_PARTITION_ID(storage_partition), &fap);
+	rc = flash_area_open(PARTITION_ID(storage_partition), &fap);
 	if (rc == 0) {
 		LOG_INF("Formatting NVS storage (%u bytes)", (unsigned)fap->fa_size);
 		flash_area_flatten(fap, 0, fap->fa_size);
@@ -285,7 +285,7 @@ bool ZephyrDataStore::formatFileSystem()
 
 #if FIXED_PARTITION_EXISTS(qspi_storage_partition)
 	/* QSPI if present (any platform) */
-	rc = flash_area_open(FIXED_PARTITION_ID(qspi_storage_partition), &fap);
+	rc = flash_area_open(PARTITION_ID(qspi_storage_partition), &fap);
 	if (rc == 0) {
 		LOG_INF("Formatting QSPI (%u bytes, may take a while)", (unsigned)fap->fa_size);
 		flash_area_flatten(fap, 0, fap->fa_size);
