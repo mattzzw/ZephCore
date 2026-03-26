@@ -46,7 +46,7 @@ Other benefits:
 ## Device Roles
 
 - **Companion** (default) -- connects to MeshCore mobile apps via BLE
-- **Repeater** -- forwards packets, configured via USB serial CLI
+- **Repeater** -- forwards packets, configured via USB serial CLI. See the [Repeater CLI Command Reference](zephcore/Repeater_CLI_commands.md) for all available commands.
 
 ## Building
 
