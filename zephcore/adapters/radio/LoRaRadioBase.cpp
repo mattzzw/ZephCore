@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * LoRa radio base class — all shared algorithms.
+ * LoRa radio base class — shared algorithms for all radio adapters.
  */
 
 #include "LoRaRadioBase.h"
@@ -17,7 +17,7 @@ LOG_MODULE_REGISTER(lora_radio_base, CONFIG_ZEPHCORE_LORA_LOG_LEVEL);
 
 namespace mesh {
 
-/* ── Constructor ──────────────────────────────────────────────────────── */
+/* ── Constructor ─────────────────────────────────────────────── */
 
 LoRaRadioBase::LoRaRadioBase(const struct device *lora_dev, MainBoard &board,
 			     NodePrefs *prefs)
@@ -40,7 +40,7 @@ LoRaRadioBase::LoRaRadioBase(const struct device *lora_dev, MainBoard &board,
 	memset(_rx_ring, 0, sizeof(_rx_ring));
 }
 
-/* ── TX wait thread ───────────────────────────────────────────────────── */
+/* ── TX wait thread ──────────────────────────────────────────── */
 
 void LoRaRadioBase::txWaitThreadFn(void *p1, void *p2, void *p3)
 {
@@ -65,7 +65,6 @@ void LoRaRadioBase::txWaitThreadFn(void *p1, void *p2, void *p3)
 						 &self->_tx_signal),
 		};
 
-		/* Check if signal was already raised */
 		unsigned int signaled;
 		int result;
 		k_poll_signal_check(&self->_tx_signal, &signaled, &result);

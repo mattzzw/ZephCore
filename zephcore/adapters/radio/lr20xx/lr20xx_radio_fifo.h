@@ -68,135 +68,30 @@ extern "C" {
  * --- PUBLIC FUNCTIONS PROTOTYPES ---------------------------------------------
  */
 
-/*!
- * @brief Read data from RX First in First out (FiFo) radio memory
- *
- * The RX FiFo radio memory contains packet received or being received.
- *
- * @param [in] context Chip implementation context
- * @param [in] buffer The buffer to be filled with data read from RX FiFo. It is up to the caller to ensure it is at
- * least @p length bytes long.
- * @param [in] length The number of bytes to read from RX FiFo
- *
- * @returns Operation status
- *
- * @see lr20xx_radio_fifo_write_tx
- */
 lr20xx_status_t lr20xx_radio_fifo_read_rx( const void* context, uint8_t* buffer, const uint16_t length );
-
-/*!
- * @brief Write data to TX First in First out (FiFo) radio memory
- *
- * The TX FiFo radio memory contains packet to send.
- *
- * @param [in] context Chip implementation context
- * @param [in] buffer The buffer to be written to TX FiFo. It is up to the caller to ensure it is at least
- * @p length bytes long.
- * @param [in] length The number of bytes to write to TX FiFo
- *
- * @returns Operation status
- *
- * @see lr20xx_radio_fifo_read_rx
- */
 lr20xx_status_t lr20xx_radio_fifo_write_tx( const void* context, const uint8_t* buffer, const uint16_t length );
-
-/*!
- * @brief Clear Rx FIFO
- *
- * @param [in] context Chip implementation context
- *
- * @returns Operation status
- */
 lr20xx_status_t lr20xx_radio_fifo_clear_rx( const void* context );
-
-/*!
- * @brief Clear Tx FIFO
- *
- * @param [in] context Chip implementation context
- *
- * @returns Operation status
- */
 lr20xx_status_t lr20xx_radio_fifo_clear_tx( const void* context );
-
-/*!
- * @brief Get Rx FIFO level
- *
- * @param [in] context Chip implementation context
- * @param [out] fifo_level Rx FIFO level in byte
- *
- * @returns Operation status
- */
 lr20xx_status_t lr20xx_radio_fifo_get_rx_level( const void* context, uint16_t* fifo_level );
-
-/*!
- * @brief Get Tx FIFO level
- *
- * @param [in] context Chip implementation context
- * @param [out] fifo_level Tx FIFO level in byte
- *
- * @returns Operation status
- */
 lr20xx_status_t lr20xx_radio_fifo_get_tx_level( const void* context, uint16_t* fifo_level );
 
-/*!
- * @brief Configure FIFO events and threshold levels triggering a FIFO interrupt in Rx and Tx
- *
- * @remark When configured, the FIFO interrupts are triggered if the FIFO level crosses the threshold in the correct
- * direction. Therefore if a threshold related IRQ is cleared, it will be raised again only if the FIFO level crosses
- * the threshold on the correct direction.
- *
- * @param [in] context Chip implementation context
- * @param [in] rx_fifo_irq_enable FIFO events triggering an interrupt in Rx
- * @param [in] tx_fifo_irq_enable FIFO events triggering an interrupt in Tx
- * @param [in] rx_fifo_high_threshold Rx FIFO threshold above which an interrupt (if
- * LR20XX_RADIO_FIFO_FLAG_THRESHOLD_HIGH is enabled) is triggered
- * @param [in] tx_fifo_low_threshold Tx FIFO threshold below which an interrupt (if
- * LR20XX_RADIO_FIFO_FLAG_THRESHOLD_LOW is enabled) is triggered
- * @param [in] rx_fifo_low_threshold Rx FIFO threshold below which an interrupt (if
- * LR20XX_RADIO_FIFO_FLAG_THRESHOLD_LOW is enabled) is triggered
- * @param [in] tx_fifo_high_threshold Tx FIFO threshold above which an interrupt (if
- * LR20XX_RADIO_FIFO_FLAG_THRESHOLD_HIGH is enabled) is triggered
- *
- * @returns Operation status
+/*
+ * Configure FIFO threshold IRQs. Threshold IRQs fire on level crossing in the triggering direction;
+ * clearing the IRQ flag does not re-fire until the threshold is crossed again.
+ * rx_fifo_high_threshold: triggers THRESHOLD_HIGH when Rx level rises above this
+ * rx_fifo_low_threshold:  triggers THRESHOLD_LOW  when Rx level falls below this
+ * tx_fifo_high_threshold: triggers THRESHOLD_HIGH when Tx level rises above this
+ * tx_fifo_low_threshold:  triggers THRESHOLD_LOW  when Tx level falls below this
  */
 lr20xx_status_t lr20xx_radio_fifo_cfg_irq( const void* context, lr20xx_radio_fifo_flag_t rx_fifo_irq_enable,
                                            lr20xx_radio_fifo_flag_t tx_fifo_irq_enable, uint16_t rx_fifo_high_threshold,
                                            uint16_t tx_fifo_low_threshold, uint16_t rx_fifo_low_threshold,
                                            uint16_t tx_fifo_high_threshold );
 
-/*!
- * @brief Clear specific IRQ flags for both Rx and Tx FIFO
- *
- * @param [in] context Chip implementation context
- * @param [in] rx_fifo_flags_to_clear Rx FIFO IRQ flags to clear
- * @param [in] tx_fifo_flags_to_clear Tx FIFO IRQ flags to clear
- *
- * @returns Operation status
- */
 lr20xx_status_t lr20xx_radio_fifo_clear_irq_flags( const void* context, lr20xx_radio_fifo_flag_t rx_fifo_flags_to_clear,
                                                    lr20xx_radio_fifo_flag_t tx_fifo_flags_to_clear );
-
-/*!
- * @brief Get FIFO events triggering a FIFO interrupt in Rx and Tx
- *
- * @param [in] context Chip implementation context
- * @param [out] rx_fifo_flags FIFO events triggering an interrupt in Rx
- * @param [out] tx_fifo_flags FIFO events triggering an interrupt in Tx
- *
- * @returns Operation status
- */
 lr20xx_status_t lr20xx_radio_fifo_get_irq( const void* context, lr20xx_radio_fifo_flag_t* rx_fifo_flags,
                                            lr20xx_radio_fifo_flag_t* tx_fifo_flags );
-
-/*!
- * @brief Clear and return FiFo IRQ flags
- *
- * @param [in] context Chip implementation context
- * @param [out] rx_fifo_flags Rx FiFo flags
- * @param [out] tx_fifo_flags Tx FiFo flags
- *
- * @returns Operation status
- */
 lr20xx_status_t lr20xx_radio_fifo_get_and_clear_irq_flags( const void* context, lr20xx_radio_fifo_flag_t* rx_fifo_flags,
                                                            lr20xx_radio_fifo_flag_t* tx_fifo_flags );
 

@@ -53,10 +53,7 @@ extern "C" {
  * --- PUBLIC MACROS -----------------------------------------------------------
  */
 
-/**
- * @brief Length in bytes of the OOK syncword
- *
- */
+/*! @brief OOK syncword length in bytes */
 #define LR20XX_RADIO_OOK_SYNCWORD_LENGTH ( 4 )
 
 /*
@@ -241,7 +238,7 @@ typedef struct
 } lr20xx_radio_ook_rx_detector_t;
 
 /**
- * @brief Rx detector configuration for OOK packet
+ * @brief Whitening configuration for OOK packet
  */
 typedef struct
 {

@@ -47,10 +47,7 @@
  * --- PRIVATE MACROS-----------------------------------------------------------
  */
 
-/**
- * @brief Length in byte of one side detector CAD configuration
- */
-#define LR20XX_RADIO_LORA_CAD_SIDE_DETECTOR_CONFIGURATION_LENGTH ( 2u )
+#define LR20XX_RADIO_LORA_CAD_SIDE_DETECTOR_CONFIGURATION_LENGTH ( 2u )  /* pnr_delta + det_peak */
 
 #define LR20XX_RADIO_LORA_SET_SIDE_DETECTOR_CONFIGURE_CAD_CMD_LENGTH ( 2 )
 #define LR20XX_RADIO_LORA_SET_MODULATION_PARAMS_CMD_LENGTH ( 2 + 2 )
@@ -82,9 +79,7 @@
  * --- PRIVATE TYPES -----------------------------------------------------------
  */
 
-/*!
- * @brief Operating codes for radio related operations
- */
+/* LoRa radio command opcodes */
 enum
 {
     LR20XX_RADIO_LORA_SET_SIDE_DETECTOR_CONFIGURE_CAD_OC = 0x021E,
@@ -118,34 +113,11 @@ typedef enum
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
  */
 
-/**
- * @brief Helper function that abstract the call for lr20xx_radio_lora_set_lora_search_symbols_by_number and
- * lr20xx_radio_lora_set_lora_search_symbols_by_mantissa
- *
- * @param[in] context Chip implementation context
- * @param[in] n_symbols A byte representing the number of symbol. Meaning depends on format
- * @param[in] format  The format that defines the meaning of n_symbols
- * @return lr20xx_status_t
- */
+/* Send SET_LORA_SEARCH_SYMBOLS command with given n_symbols value and format byte */
 static lr20xx_status_t abstract_search_symbols( const void* context, uint8_t n_symbols, search_symbol_format_t format );
-
-/**
- * @brief Read two bytes from buffer and convert it in 16 bits value MSB first
- *
- * @param buffer Pointer to location where to read 2 bytes. It is up to the caller to ensure there are at least two
- * bytes to read
- *
- * @return The MSB first value corresponding to the consecutive bytes read
- */
+/* Read 2 bytes MSB-first from buffer into uint16_t */
 static uint16_t read_2_bytes_msbf( const uint8_t* buffer );
-
-/**
- * @brief Compute the byte representation of LoRa side detector configuration
- *
- * @param side_detector_cfg The LoRa side detector configuration
- *
- * @return uint8_t The byte representing the LoRa side detector configuration
- */
+/* Pack lr20xx_radio_lora_side_detector_cfg_t into a single command byte: sf[7:4] | ppm[3:2] | iq[1:0] */
 static uint8_t radio_lora_side_detector_cfg_to_byte( const lr20xx_radio_lora_side_detector_cfg_t* side_detector_cfg );
 
 /*
@@ -563,24 +535,20 @@ uint32_t lr20xx_radio_lora_get_time_on_air_in_ms( const lr20xx_radio_lora_pkt_pa
 {
     uint32_t numerator   = 1000U * lr20xx_radio_lora_get_time_on_air_numerator( pkt_p, mod_p );
     uint32_t denominator = lr20xx_radio_lora_get_bw_in_hz( mod_p->bw );
-    // Perform integral ceil()
     return ( numerator + denominator - 1 ) / denominator;
 }
 
 lr20xx_radio_lora_ppm_t lr20xx_radio_lora_get_recommended_ppm_offset( lr20xx_radio_lora_sf_t sf,
                                                                       lr20xx_radio_lora_bw_t bw )
 {
-    // PPM offset is LR20XX_RADIO_LORA_PPM_1_4, except for the cases that follow
     lr20xx_radio_lora_ppm_t ppm_offset = LR20XX_RADIO_LORA_PPM_1_4;
 
     if( ( sf != LR20XX_RADIO_LORA_SF11 ) && ( sf != LR20XX_RADIO_LORA_SF12 ) )
     {
-        // 1. If sf is not SF11 nor SF12: no ppm offset
         ppm_offset = LR20XX_RADIO_LORA_NO_PPM;
     }
     else
     {
-        // 2. Else it depends on the bandwidth
         switch( bw )
         {
         case LR20XX_RADIO_LORA_BW_1000:

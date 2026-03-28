@@ -52,9 +52,7 @@ extern "C" {
  * --- PUBLIC MACROS -----------------------------------------------------------
  */
 
-/*!
- * @brief Maximum number of words that can be written to / read from a LR20XX chip with regmem32 commands
- */
+/*! @brief Max words per regmem32 read/write (LR2021 datasheet §5.4.3) */
 #define LR20XX_REGMEM_MAX_WRITE_READ_WORDS 32
 
 /*

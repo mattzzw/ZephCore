@@ -57,11 +57,7 @@ extern "C" {
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
 
-/*!
- * @brief Frequency step in MHz used to compute the image calibration parameter
- *
- * @see lr11xx_system_calibrate_image_in_mhz
- */
+/** @brief Image calibration frequency resolution — chip accepts frequency in 4 MHz steps (SWDR001 §4.3) */
 #define LR11XX_SYSTEM_IMAGE_CALIBRATION_STEP_IN_MHZ 4
 
 /*

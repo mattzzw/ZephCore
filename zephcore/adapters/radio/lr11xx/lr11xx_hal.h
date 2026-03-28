@@ -57,9 +57,7 @@ extern "C" {
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
 
-/**
- * @brief Write this to SPI bus while reading data, or as a dummy/placeholder
- */
+/** @brief NOP byte sent on MOSI during read transactions (LR11XX SPI protocol) */
 #define LR11XX_NOP ( 0x00 )
 
 /*
@@ -73,7 +71,7 @@ extern "C" {
 typedef enum lr11xx_hal_status_e
 {
     LR11XX_HAL_STATUS_OK    = 0,
-    LR11XX_HAL_STATUS_ERROR = 3,
+    LR11XX_HAL_STATUS_ERROR = 3,  /* value 3 is cast directly to lr11xx_status_t ERROR */
 } lr11xx_hal_status_t;
 
 /*
@@ -181,7 +179,7 @@ inline static uint8_t lr11xx_hal_compute_crc( const uint8_t initial_value, const
 
             if( sum != 0 )
             {
-                crc ^= 0x65;
+                crc ^= 0x65;  /* CRC-8/NRSC-5 reflected polynomial (0xA6 >> 1) */
             }
 
             extract >>= 1;

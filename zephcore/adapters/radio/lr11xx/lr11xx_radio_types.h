@@ -204,7 +204,7 @@ typedef enum
  */
 typedef enum
 {
-    LR11XX_RADIO_GFSK_CRC_OFF         = 0x01,  //!< CRC check deactivated
+    LR11XX_RADIO_GFSK_CRC_OFF         = 0x01,  //!< CRC disabled (non-zero by design — SWDR001 §5.6)
     LR11XX_RADIO_GFSK_CRC_1_BYTE      = 0x00,
     LR11XX_RADIO_GFSK_CRC_2_BYTES     = 0x02,
     LR11XX_RADIO_GFSK_CRC_1_BYTE_INV  = 0x04,
@@ -360,8 +360,8 @@ typedef enum
 typedef enum
 {
     LR11XX_RADIO_CAD_EXIT_MODE_STANDBYRC = 0x00,  //!< Enter standby RC mode after CAD operation
-    LR11XX_RADIO_CAD_EXIT_MODE_RX        = 0x01,  //!< Enter in RX mode if an activity is detected
-    LR11XX_RADIO_CAD_EXIT_MODE_TX        = 0x10,  //!< Enter in TX mode if no activity is detected
+    LR11XX_RADIO_CAD_EXIT_MODE_RX        = 0x01,  //!< Enter RX if activity detected
+    LR11XX_RADIO_CAD_EXIT_MODE_TX        = 0x10,  //!< Enter TX if no activity detected (0x10, not 0x02 — SWDR001 §5.7)
 } lr11xx_radio_cad_exit_mode_t;
 
 /*!

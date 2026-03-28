@@ -51,7 +51,7 @@ public:
 	uint16_t transport_codes[2];
 	uint8_t path[MAX_PATH_SIZE];
 	uint8_t payload[MAX_PACKET_PAYLOAD];
-	int8_t _snr;
+	int8_t _snr;  /* SNR * 4 (quarter-dB fixed point) */
 
 	void calculatePacketHash(uint8_t *dest_hash) const;
 	uint8_t getRouteType() const { return header & PH_ROUTE_MASK; }
@@ -61,11 +61,12 @@ public:
 	uint8_t getPayloadType() const { return (header >> PH_TYPE_SHIFT) & PH_TYPE_MASK; }
 	uint8_t getPayloadVer() const { return (header >> PH_VER_SHIFT) & PH_VER_MASK; }
 
+	/* path_len layout: bits[7:6] = hash_size - 1, bits[5:0] = hop count */
 	uint8_t getPathHashSize() const { return (path_len >> 6) + 1; }
-	uint8_t getPathHashCount() const { return path_len & 63; }
+	uint8_t getPathHashCount() const { return path_len & 0x3F; }
 	uint8_t getPathByteLen() const { return getPathHashCount() * getPathHashSize(); }
-	void setPathHashCount(uint8_t n) { path_len &= ~63; path_len |= n; }
-	void setPathHashSizeAndCount(uint8_t sz, uint8_t n) { path_len = ((sz - 1) << 6) | (n & 63); }
+	void setPathHashCount(uint8_t n) { path_len &= ~0x3F; path_len |= n; }
+	void setPathHashSizeAndCount(uint8_t sz, uint8_t n) { path_len = ((sz - 1) << 6) | (n & 0x3F); }
 
 	static uint8_t copyPath(uint8_t *dest, const uint8_t *src, uint8_t path_len);
 	static size_t writePath(uint8_t *dest, const uint8_t *src, uint8_t path_len);

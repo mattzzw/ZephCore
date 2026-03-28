@@ -1,9 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * LR11xx HAL implementation for Zephyr - ZephCore
- *
- * Simplified HAL that uses direct SPI/GPIO access without Zephyr device model.
- * Based on IRNAS/SWDR001-Zephyr but adapted for ZephCore's simpler needs.
+ * LR11xx HAL for Zephyr — ZephCore
  */
 
 #ifndef LR11XX_HAL_ZEPHYR_H
@@ -21,76 +18,53 @@ extern "C" {
 #include "lr11xx_hal.h"
 
 /**
- * @brief LR11xx HAL context for Zephyr
+ * @brief HAL context passed as 'context' to all lr11xx_hal_* functions.
  *
- * This structure is passed as the 'context' parameter to all lr11xx_hal_* functions.
- * It contains all the hardware configuration needed to communicate with the radio.
+ * NSS is software-controlled (not via SPI CS) to allow the two-phase read
+ * protocol (write command / deassert / reassert / read response).
  *
- * CRITICAL: All SPI operations are protected by spi_mutex. The LR1110 radio is
- * accessed from two threads:
- *   1. Main thread: mesh event loop (noise floor calibration, TX, reconfigure)
- *   2. Dedicated DIO1 work queue: interrupt handler (RX packet processing)
- * Without the mutex, concurrent SPI access corrupts the LR1110 command/response
- * protocol, causing the BUSY pin to get stuck HIGH permanently.
+ * The LR1110 is accessed from two threads (main mesh loop and DIO1 work queue);
+ * callers must serialize access externally. Concurrent SPI access corrupts the
+ * command/response protocol and stalls BUSY HIGH permanently.
  */
 struct lr11xx_hal_context {
-    /* SPI device */
     const struct device *spi_dev;
     struct spi_config spi_cfg;
 
-    /* GPIO pins */
-    struct gpio_dt_spec nss;    /* Chip select (directly controlled, not via SPI CS) */
-    struct gpio_dt_spec reset;  /* Reset pin (active low) */
-    struct gpio_dt_spec busy;   /* Busy pin (high = busy) */
-    struct gpio_dt_spec dio1;   /* DIO1 interrupt pin */
+    struct gpio_dt_spec nss;    /* chip select, software-controlled, ACTIVE_LOW in DTS */
+    struct gpio_dt_spec reset;  /* hardware reset, ACTIVE_LOW in DTS */
+    struct gpio_dt_spec busy;   /* busy indicator, high = chip processing */
+    struct gpio_dt_spec dio1;   /* IRQ output from chip */
 
-    /* Optional pins */
-    struct gpio_dt_spec dio2;   /* DIO2 (often RF switch control) */
-    struct gpio_dt_spec rxen;   /* RX enable (for external PA/LNA) */
-    struct gpio_dt_spec txen;   /* TX enable (for external PA/LNA) */
+    struct gpio_dt_spec dio2;   /* optional: RF switch or second IRQ */
+    struct gpio_dt_spec rxen;   /* optional: external LNA enable */
+    struct gpio_dt_spec txen;   /* optional: external PA enable */
 
-    /* TCXO config */
-    uint16_t tcxo_voltage_mv;   /* 0 = no TCXO, else voltage in mV (e.g., 1600 = 1.6V) */
-    uint32_t tcxo_startup_us;   /* TCXO startup time in microseconds */
+    uint16_t tcxo_voltage_mv;   /* 0 = XTAL, non-zero = TCXO supply in mV */
+    uint32_t tcxo_startup_us;   /* TCXO startup time; passed to SetTcxoMode timeout */
 
-    /* State tracking */
     volatile bool radio_is_sleeping;
 };
 
 /**
- * @brief Initialize the HAL context GPIOs
+ * @brief Configure GPIOs and register interrupt callbacks. Call before any HAL function.
  *
- * Must be called before any other HAL functions.
- *
- * @param ctx HAL context with gpio specs already filled in
+ * @param ctx HAL context with gpio specs filled in
  * @return 0 on success, negative errno on failure
  */
 int lr11xx_hal_init(struct lr11xx_hal_context *ctx);
 
-/**
- * @brief GPIO callback type for DIO1 interrupt
- */
+/** @brief DIO1 interrupt callback type; invoked directly from GPIO ISR — must be ISR-safe */
 typedef void (*lr11xx_dio1_callback_t)(void *user_data);
 
 /**
- * @brief Set DIO1 interrupt callback
- *
- * @param ctx HAL context
- * @param cb Callback function (called directly from GPIO ISR context —
- *           must be ISR-safe, e.g. k_work_submit_to_queue())
- * @param user_data User data passed to callback
+ * @brief Register DIO1 rising-edge callback.
+ * @param cb Must be ISR-safe (e.g., submit to a k_work_q, not block)
  */
 void lr11xx_hal_set_dio1_callback(struct lr11xx_hal_context *ctx,
                                    lr11xx_dio1_callback_t cb, void *user_data);
 
-/**
- * @brief Enable DIO1 interrupt
- */
 void lr11xx_hal_enable_dio1_irq(struct lr11xx_hal_context *ctx);
-
-/**
- * @brief Disable DIO1 interrupt
- */
 void lr11xx_hal_disable_dio1_irq(struct lr11xx_hal_context *ctx);
 
 #ifdef __cplusplus

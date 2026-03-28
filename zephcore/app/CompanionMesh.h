@@ -10,7 +10,7 @@
 #include <ZephyrDataStore.h>
 #include <NodePrefs.h>
 
-/* BLE push notification codes - matches Arduino */
+/* BLE push notification codes */
 #define PUSH_CODE_ADVERT              0x80
 #define PUSH_CODE_PATH_UPDATED        0x81
 #define PUSH_CODE_SEND_CONFIRMED      0x82
@@ -36,36 +36,34 @@
 #define AUTO_ADD_ROOM_SERVER       (1 << 3)
 #define AUTO_ADD_SENSOR            (1 << 4)
 
-/* Maximum BLE frame size — must match NUS MTU negotiated size.
- * All protocol response buffers use this. */
+/* Max BLE frame size — must match NUS MTU negotiated size */
 #define MAX_FRAME_SIZE 172
 
-/* Contact frame size: 1 header + 32 pubkey + 1 type + 1 flags + 1 path_len
- * + 64 path + 32 name + 4 timestamp + 4 lat + 4 lon + 4 lastmod = 148 */
+/* 1 header + 32 pubkey + 1 type + 1 flags + 1 path_len + 64 path + 32 name + 4*4 fields = 148 */
 #define CONTACT_FRAME_SIZE 148
 
-/* Offline message queue size */
+/* Offline message queue depth */
 #ifdef CONFIG_ZEPHCORE_OFFLINE_QUEUE_SIZE
 #define OFFLINE_QUEUE_SIZE CONFIG_ZEPHCORE_OFFLINE_QUEUE_SIZE
 #else
 #define OFFLINE_QUEUE_SIZE 16
 #endif
 
-/* ACK table size */
+/* Pending ACK tracking slots */
 #ifdef CONFIG_ZEPHCORE_ACK_TABLE_SIZE
 #define ACK_TABLE_SIZE CONFIG_ZEPHCORE_ACK_TABLE_SIZE
 #else
 #define ACK_TABLE_SIZE 8
 #endif
 
-/* Advert path table size */
+/* Recently-heard advert path slots */
 #ifdef CONFIG_ZEPHCORE_ADVERT_PATH_TABLE_SIZE
 #define ADVERT_PATH_TABLE_SIZE CONFIG_ZEPHCORE_ADVERT_PATH_TABLE_SIZE
 #else
 #define ADVERT_PATH_TABLE_SIZE 16
 #endif
 
-/* Structure for tracking recently heard adverts */
+/* Cached advert path entry */
 struct AdvertPath {
 	uint8_t pubkey_prefix[7];
 	uint8_t path_len;
@@ -74,19 +72,19 @@ struct AdvertPath {
 	uint8_t path[MAX_PATH_SIZE];
 };
 
-/* Callback type for BLE push notifications */
+/* BLE push notification callback */
 typedef void (*PushCallback)(uint8_t code, const uint8_t *data, size_t len);
 
-/* Callback type for write frame */
+/* BLE write frame callback */
 typedef size_t (*WriteFrameCallback)(const uint8_t *data, size_t len);
 
-/* Callback for getting battery millivolts */
+/* Battery millivolt read callback */
 typedef uint16_t (*GetBatteryCallback)(void);
 
-/* Callback for radio reconfigure */
+/* Radio reconfigure callback */
 typedef void (*RadioReconfigureCallback)(void);
 
-/* Callback for BLE PIN change */
+/* BLE PIN change callback */
 typedef void (*PinChangeCallback)(uint32_t new_pin);
 
 /* Callback for scheduling background save (called instead of blocking) */

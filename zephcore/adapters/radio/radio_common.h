@@ -12,40 +12,34 @@
 #include <zephyr/drivers/lora.h>
 
 /* --- Noise floor calibration (EMA) ---
- * Median of SAMPLES_PER_TICK RSSI reads (~200 us), fed into an
- * exponential moving average.  Median rejects up to N/2-1 outliers
- * without the downward bias of min or spike sensitivity of average.
- * alpha = 1/8: new_floor = floor + round((sample - floor) / 8)
- * Convergence: ~8 ticks (~40s at 5s housekeeping) to track a step change.
- * Samples above floor + SAMPLING_THRESHOLD are rejected (interference). */
-#define NOISE_FLOOR_EMA_SHIFT            3   /* alpha = 1 / (1 << 3) = 1/8 */
-#define NOISE_FLOOR_SAMPLES_PER_TICK     8   /* median of 8 RSSI reads per tick */
-#define NOISE_FLOOR_UNGUARDED_INTERVAL   16  /* ticks between unfiltered samples (must be power of 2) */
-#define NOISE_FLOOR_SAMPLING_THRESHOLD   14  /* only sample if rssi < floor + threshold */
-#define DEFAULT_NOISE_FLOOR              0   /* accept all samples until first update */
+ * Median-of-N RSSI reads → EMA.  alpha = 1/8, converges in ~8 ticks (~40s).
+ * Samples above floor + SAMPLING_THRESHOLD rejected as interference. */
+#define NOISE_FLOOR_EMA_SHIFT            3   /* alpha = 1/(1<<3) = 1/8 */
+#define NOISE_FLOOR_SAMPLES_PER_TICK     8   /* median of 8 reads per tick */
+#define NOISE_FLOOR_UNGUARDED_INTERVAL   16  /* ticks between unfiltered samples (power of 2) */
+#define NOISE_FLOOR_SAMPLING_THRESHOLD   14  /* dB above floor to reject as interference */
+#define DEFAULT_NOISE_FLOOR              0   /* sentinel: seed from first sample */
 
-/* --- RX ring buffer ---
- * 8 slots buffer ~40ms+ of back-to-back arrivals at SF7/BW500.
- * Main loop drains in microseconds per packet.  Cost: 8 × 260 = ~2 KB. */
-#define RX_RING_SIZE 8
+/* --- RX ring buffer --- */
+#define RX_RING_SIZE 8  /* ~2 KB; buffers burst arrivals at SF7/BW500 */
 
 /* --- TX wait thread --- */
 #define TX_WAIT_THREAD_STACK_SIZE 1024
-#define TX_WAIT_THREAD_PRIORITY   10  /* preemptible, lower than main */
-#define TX_TIMEOUT_MS             5000   /* TX completion timeout */
+#define TX_WAIT_THREAD_PRIORITY   10     /* preemptible, below main thread */
+#define TX_TIMEOUT_MS             5000   /* hard timeout for TX completion signal */
 
 /* --- SNR thresholds per spreading factor (SF7..SF12) --- */
 inline constexpr float lora_snr_threshold[] = {
 	-7.5f, -10.0f, -12.5f, -15.0f, -17.5f, -20.0f
 };
 
-/* --- Callback types (ISR-safe) --- */
+/* --- Callback types --- */
 typedef void (*RadioRxCallback)(void *user_data);
 typedef void (*RadioTxDoneCallback)(void *user_data);
 
-/* --- Zephyr enum mapping utilities --- */
+/* --- Zephyr enum mapping --- */
 
-/* Map Zephyr bandwidth enum to Hz */
+
 static inline uint32_t bandwidth_to_hz(enum lora_signal_bandwidth bw)
 {
 	switch (bw) {
@@ -63,9 +57,7 @@ static inline uint32_t bandwidth_to_hz(enum lora_signal_bandwidth bw)
 	}
 }
 
-/* Map kHz bandwidth value to Zephyr enum.
- * Input is (uint16_t)(float_bw) — truncated, e.g. 7.8→7, 10.4→10, 62.5→62.
- * Zephyr >=4.4 has narrow BWs (7-62 kHz); <=4.3 only has 125/250/500. */
+/* Input is truncated kHz (e.g. 7.8→7, 10.4→10, 62.5→62) */
 static inline enum lora_signal_bandwidth bw_khz_to_enum(uint16_t bw_khz)
 {
 	switch (bw_khz) {
@@ -83,7 +75,7 @@ static inline enum lora_signal_bandwidth bw_khz_to_enum(uint16_t bw_khz)
 	}
 }
 
-/* Map ZephCore CR (5-8) to Zephyr coding_rate enum (1-4) */
+/* CR 5-8 → Zephyr coding_rate enum */
 static inline enum lora_coding_rate cr_to_enum(uint8_t cr)
 {
 	switch (cr) {

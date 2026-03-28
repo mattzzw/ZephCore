@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * ZephCore MainBoard interface - matches MeshCore.h
+ * ZephCore MainBoard interface
  */
 
 #pragma once

@@ -52,14 +52,10 @@ extern "C" {
  * --- PUBLIC MACROS -----------------------------------------------------------
  */
 
-/**
- * @brief LoRa syncword value for LoRaWAN public networks
- */
+/*! @brief LoRa syncword for LoRaWAN public networks */
 #define LR20XX_RADIO_LORA_SYNCWORD_LORAWAN_PUBLIC_NETWORK ( 0x34 )
 
-/**
- * @brief LoRa syncword value for LoRaWAN private networks
- */
+/*! @brief LoRa syncword for LoRaWAN private networks */
 #define LR20XX_RADIO_LORA_SYNCWORD_LORAWAN_PRIVATE_NETWORK ( 0x12 )
 
 /*
@@ -178,6 +174,7 @@ typedef enum
                                                 //!< mode. Otherwise it enters in fallback mode
     LR20XX_RADIO_LORA_CAD_EXIT_MODE_TX = 0x10,  //!< If the CAD operation does not detect an activity, the chip enters
                                                 //!< in TX mode. Otherwise it enters in fallback mode
+                                                //!< (0x10, not 0x02: register encoding gap in LR2021 datasheet)
 } lr20xx_radio_lora_cad_exit_mode_t;
 
 /**

@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * ZephCore Identity - Ed25519 public identity
+ * ZephCore Identity - Ed25519 key pairs
  */
 
 #pragma once

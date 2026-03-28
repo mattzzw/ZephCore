@@ -57,19 +57,12 @@ extern "C" {
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
 
-/*!
- * @brief Length in byte of the LR11XX version blob
- */
+/** @brief Version response length: hw(1) + type(1) + fw(2) */
 #define LR11XX_SYSTEM_VERSION_LENGTH ( 4 )
 
-/*!
- * @brief Length of the LR11XX Unique Identifier in bytes
- *
- * The LR11XX Unique Identifiers is an 8 byte long buffer
- */
-#define LR11XX_SYSTEM_UID_LENGTH ( 8 )
-#define LR11XX_SYSTEM_JOIN_EUI_LENGTH ( 8 )
-#define LR11XX_SYSTEM_PIN_LENGTH ( 4 )
+#define LR11XX_SYSTEM_UID_LENGTH ( 8 )      /**< Device unique identifier, 8 bytes */
+#define LR11XX_SYSTEM_JOIN_EUI_LENGTH ( 8 ) /**< LoRaWAN Join EUI, 8 bytes */
+#define LR11XX_SYSTEM_PIN_LENGTH ( 4 )      /**< Provisioning PIN, 4 bytes */
 
 /*
  * -----------------------------------------------------------------------------

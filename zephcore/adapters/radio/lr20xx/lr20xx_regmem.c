@@ -54,6 +54,7 @@
 #define LR20XX_REGMEM_WRITE_REGMEM32_MASK_CMD_LENGTH ( 2 + 3 + 4 + 4 )
 #define LR20XX_REGMEM_READ_REGMEM32_CMD_LENGTH ( 2 + 3 + 1 )
 
+/* 32 words × 4 bytes = 128 bytes max payload; 256 provides headroom */
 #define LR20XX_REGMEM_BUFFER_SIZE_MAX ( 256 )
 
 /*
@@ -81,54 +82,22 @@ enum
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
  */
 
-/*!
- * @brief Helper function that fill both cbuffer with opcode and memory address
- *
- * It is typically used in read/write regmem32 functions.
- *
- * @warning It is up to the caller to ensure cbuffer is big enough to contain opcode and address!
- */
+/* @warning caller must ensure cbuffer is sized for opcode + 3-byte address */
 static void lr20xx_regmem_fill_cbuffer_opcode_address( uint8_t* cbuffer, uint16_t opcode, uint32_t address );
 
-/*!
- * @brief Helper function that fill both cbuffer with opcode memory address, and data length to read
- *
- * It is typically used in read functions.
- *
- * @warning It is up to the caller to ensure cbuffer is big enough to contain opcode and address!
- */
+/* @warning caller must ensure cbuffer is sized for opcode + 3-byte address + length byte */
 static void lr20xx_regmem_fill_cbuffer_opcode_address_length( uint8_t* cbuffer, uint16_t opcode, uint32_t address,
                                                               uint8_t length );
 
-/*!
- * @brief Helper function that fill both cbuffer with data
- *
- * It is typically used in write write regmem32 functions.
- *
- * @warning It is up to the caller to ensure cdata is big enough to contain all data!
- */
+/* @warning caller must ensure cdata is sized for data_length × 4 bytes */
 static void lr20xx_regmem_fill_cdata( uint8_t* cdata, const uint32_t* data, uint8_t data_length );
 
-/*!
- * @brief Helper function that fill both cbuffer and cdata buffers with opcode, memory address and data
- *
- * It is typically used to factorize and write regmem32 operations. Behind the scene it calls the other helpers
- * lr20xx_regmem_fill_cbuffer_opcode_address and lr20xx_regmem_fill_cdata.
- *
- * @warning It is up to the caller to ensure cbuffer and cdata are big enough to contain their respective information!
- */
+/* @warning caller must ensure cbuffer and cdata are appropriately sized */
 static void lr20xx_regmem_fill_cbuffer_cdata_opcode_address_data( uint8_t* cbuffer, uint8_t* cdata, uint16_t opcode,
                                                                   uint32_t address, const uint32_t* data,
                                                                   uint8_t data_length );
 
-/*!
- * @brief Helper function that convert an array of uint8_t into an array of uint32_t
- *
- * Typically used in the read function returning uint32_t array.
- *
- * @warning It is up to the caller to ensure the raw_buffer is of length at least "out_buffer_length *
- * sizeof(uint32_t)"!
- */
+/* @warning caller must ensure raw_buffer is at least out_buffer_length × 4 bytes */
 static void lr20xx_regmem_fill_out_buffer_from_raw_buffer( uint32_t* out_buffer, const uint8_t* raw_buffer,
                                                            uint8_t out_buffer_length );
 

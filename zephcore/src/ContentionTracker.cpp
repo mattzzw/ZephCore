@@ -17,11 +17,10 @@ ContentionTracker::ContentionTracker()
 	memset(_ring, 0, sizeof(_ring));
 }
 
-/* FNV-1a hash of payload_type + first 8 bytes of payload.
- * Cheap and sufficient for 16-entry correlation. */
+/* FNV-1a over payload_type + first 8 payload bytes */
 uint32_t ContentionTracker::computePacketHash32(const Packet *pkt)
 {
-	uint32_t h = 0x811c9dc5u; /* FNV offset basis */
+	uint32_t h = 0x811c9dc5u; /* FNV-1a offset basis */
 	uint8_t t = pkt->getPayloadType();
 	h = (h ^ t) * 0x01000193u;
 	int n = pkt->payload_len < 8 ? pkt->payload_len : 8;
@@ -50,14 +49,13 @@ void ContentionTracker::finalizeEntry(int idx)
 	int32_t diff = (int32_t)sample_x256 - (int32_t)_ema_x256;
 
 	if (_finalized_count < WARMUP_PACKETS) {
-		/* During warmup, seed the EMA directly */
+		/* Warmup: seed EMA with fast convergence */
 		if (_finalized_count == 0) {
 			_ema_x256 = sample_x256;
 		} else {
 			_ema_x256 = (uint32_t)((int32_t)_ema_x256 + (diff >> 1));
 		}
 	} else {
-		/* Normal EMA update: ema += (sample - ema) >> shift */
 		_ema_x256 = (uint32_t)((int32_t)_ema_x256 + (diff >> EMA_SHIFT));
 	}
 
@@ -69,7 +67,7 @@ void ContentionTracker::trackRetransmit(uint32_t hash32, uint32_t now_ms)
 {
 	_last_retransmit_ms = now_ms;
 
-	/* If ring is full, finalize the oldest active entry */
+	/* Evict oldest if ring slot occupied */
 	if (_ring[_next_idx].active) {
 		finalizeEntry(_next_idx);
 	}
@@ -91,7 +89,6 @@ bool ContentionTracker::recordDupeIfTracked(uint32_t hash32, uint32_t now_ms)
 
 	Entry &e = _ring[idx];
 
-	/* Check if entry has expired */
 	if (now_ms - e.first_seen_ms > WINDOW_MS) {
 		finalizeEntry(idx);
 		return false;
@@ -111,7 +108,7 @@ uint16_t ContentionTracker::getReactiveHeadroom(uint32_t hash32, uint32_t airtim
 	uint32_t per_dupe = (uint32_t)(_backoff_multiplier * (float)airtime_ms);
 	if (per_dupe == 0) return 0;
 
-	/* Hard cap on total reactive extension per packet */
+	/* Hard cap: REACTIVE_HARD_CAP_MS total extension per packet */
 	if (_ring[idx].reactive_added_ms >= REACTIVE_HARD_CAP_MS) return 0;
 
 	uint32_t remaining = REACTIVE_HARD_CAP_MS - _ring[idx].reactive_added_ms;
@@ -130,14 +127,13 @@ void ContentionTracker::addReactiveExtension(uint32_t hash32, uint16_t added_ms)
 
 void ContentionTracker::tick(uint32_t now_ms)
 {
-	/* Finalize expired entries */
 	for (int i = 0; i < RING_SIZE; i++) {
 		if (_ring[i].active && now_ms - _ring[i].first_seen_ms > WINDOW_MS) {
 			finalizeEntry(i);
 		}
 	}
 
-	/* Staleness decay: if no retransmit in 5 minutes, decay toward 0 */
+	/* Decay EMA toward 0 if no retransmit in STALE_MS */
 	if (_last_retransmit_ms != 0 && now_ms - _last_retransmit_ms > STALE_MS) {
 		if (_ema_x256 > 0) {
 			_ema_x256 -= _ema_x256 >> EMA_SHIFT;
@@ -152,7 +148,7 @@ float ContentionTracker::getContentionEstimate() const
 
 float ContentionTracker::getFloodDelayFactor() const
 {
-	if (!isWarmedUp()) return 0.5f;
+	if (!isWarmedUp()) return 0.5f; /* conservative default before warmup */
 
 	float est = getContentionEstimate();
 	if (est <= 0.0f) return MIN_FLOOD_FACTOR;

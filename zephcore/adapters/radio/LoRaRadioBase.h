@@ -1,9 +1,7 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * LoRa radio base class — all shared state and algorithms.
- *
- * Subclasses (SX126xRadio, LR1110Radio, …) only implement the hw*()
- * primitives that talk to real hardware.  Everything else lives here.
+ * LoRa radio base class — shared state and algorithms.
+ * Subclasses implement hw*() primitives only.
  */
 
 #pragma once
@@ -80,30 +78,16 @@ public:
 protected:
 	/* ── Hardware primitives — subclass MUST implement ─────────── */
 
-	/** Apply lora_modem_config + any chip-specific extras (image cal, etc.) */
 	virtual void hwConfigure(const struct lora_modem_config &cfg) = 0;
-
-	/** Cancel current async receive */
 	virtual void hwCancelReceive() = 0;
-
-	/** Start async send — returns 0 on success */
 	virtual int hwSendAsync(uint8_t *buf, uint32_t len,
 				struct k_poll_signal *sig) = 0;
-
-	/** Read instantaneous RSSI from hardware */
 	virtual int16_t hwGetCurrentRSSI() = 0;
-
-	/** Check IRQ flags for preamble/header detection */
 	virtual bool hwIsPreambleDetected() = 0;
-
-	/** Set RX LNA boost on/off */
 	virtual void hwSetRxBoost(bool enable) = 0;
-
-	/** Reset AGC (chip-specific, may be no-op) */
 	virtual void hwResetAGC() = 0;
 
-	/** Check if chip BUSY pin is high — no SPI, safe to call any time.
-	 *  Returns false on chips without a duty-cycle sleep phase (LR1110). */
+	/** GPIO-only BUSY check (no SPI). Default false for chips without duty-cycle sleep. */
 	virtual bool hwIsChipBusy() { return false; }
 
 	/* ── Shared helpers available to subclasses ────────────────── */
@@ -113,7 +97,6 @@ protected:
 	void configureTx();
 	void startReceive();
 
-	/* Subclass begin() should call this to start TX wait thread */
 	void startTxThread(k_thread_stack_t *stack, size_t stack_size);
 
 	const struct device *_dev;
@@ -121,8 +104,8 @@ protected:
 	MainBoard *_board;
 	atomic_t _in_recv_mode;
 	atomic_t _tx_active;
-	volatile float _last_rssi;   /* word-aligned float — atomic on ARM */
-	volatile float _last_snr;    /* word-aligned float — atomic on ARM */
+	volatile float _last_rssi;   /* word-aligned: atomic on ARM */
+	volatile float _last_snr;    /* word-aligned: atomic on ARM */
 
 	/* RX ring buffer */
 	struct RxPacket {
@@ -142,18 +125,18 @@ protected:
 	/* Noise floor calibration state */
 	int _noise_floor;
 	int _calibration_threshold;
-	uint8_t _ema_unguarded;         /* ticks until next unfiltered sample */
+	uint8_t _ema_unguarded;         /* tick counter for warmup + periodic bypass */
 
 	/* Power saving */
 	bool _rx_duty_cycle_enabled;
 	bool _rx_boost_enabled;
 	int8_t _tx_power_reduction_db;
 
-	/* Config cache — skip redundant hwConfigure() on TX↔RX transitions */
+	/* Config cache — skip redundant hwConfigure() */
 	struct lora_modem_config _last_cfg;
 	bool _config_cached;
 
-	/* Static RX callback — passed to lora_recv_async() / lora_recv_duty_cycle() */
+	/* ISR RX callback — passed to lora_recv_async() / lora_recv_duty_cycle() */
 	static void rxCallbackStatic(const struct device *dev, uint8_t *data,
 				     uint16_t size, int16_t rssi, int8_t snr,
 				     void *user_data);

@@ -1,6 +1,6 @@
 /*
  * SPDX-License-Identifier: Apache-2.0
- * ZephCore clock interfaces - matches Dispatcher.h / MeshCore.h
+ * ZephCore clock interfaces
  */
 
 #pragma once

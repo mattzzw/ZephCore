@@ -51,16 +51,10 @@ extern "C" {
  * --- PUBLIC MACROS -----------------------------------------------------------
  */
 
-/**
- * @brief Length in bytes of the FLRC short syncword
- *
- */
+/*! @brief FLRC short syncword length in bytes */
 #define LR20XX_RADIO_FLRC_SHORT_SYNCWORD_LENGTH ( 2 )
 
-/**
- * @brief Length in bytes of the FLRC syncword
- *
- */
+/*! @brief FLRC syncword length in bytes */
 #define LR20XX_RADIO_FLRC_SYNCWORD_LENGTH ( 4 )
 
 /*
@@ -185,9 +179,8 @@ typedef enum lr20xx_radio_flrc_crc_types_e
     LR20XX_RADIO_FLRC_CRC_4_BYTES = 0x03,
 } lr20xx_radio_flrc_crc_types_t;
 
-/**
- * @brief Modulation configuration for LoRa packet
- *
+/*!
+ * @brief Modulation configuration for FLRC packet
  */
 typedef struct lr20xx_radio_flrc_mod_params_s
 {

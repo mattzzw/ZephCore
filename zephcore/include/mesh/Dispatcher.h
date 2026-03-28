@@ -31,7 +31,7 @@ struct DutyCycleTracker {
 
 	void recordTx(uint32_t duration_ms, uint32_t now) {
 		if (duty_pct == 0) return;
-		if (now - window_start > 3600000UL) {
+		if (now - window_start > 3600000UL) { /* 1 hour window */
 			window_start = now;
 			window_airtime_ms = 0;
 		}
@@ -40,14 +40,14 @@ struct DutyCycleTracker {
 
 	bool isExceeded(uint32_t now) const {
 		if (duty_pct == 0) return false;
-		if (now - window_start > 3600000UL) return false;  /* window expired */
-		uint32_t budget_ms = (3600000UL / 100) * (uint32_t)duty_pct;
+		if (now - window_start > 3600000UL) return false;  /* 1h window expired */
+		uint32_t budget_ms = (3600000UL / 100) * (uint32_t)duty_pct; /* ms per 1% of 1h */
 		return window_airtime_ms >= budget_ms;
 	}
 
 	uint32_t budgetMs() const {
 		if (duty_pct == 0) return 0;
-		return (3600000UL / 100) * (uint32_t)duty_pct;
+		return (3600000UL / 100) * (uint32_t)duty_pct; /* ms per 1% of 1h */
 	}
 };
 
@@ -68,8 +68,7 @@ public:
 	virtual Packet *getNextInbound(uint32_t now) = 0;
 };
 
-/* Callback fired when a packet is queued for transmission with a delay.
- * Allows the event loop to schedule a precise wake at delay expiry. */
+/* Notifies event loop of pending TX so it can schedule a wake. */
 typedef void (*tx_queued_callback_t)(uint32_t delay_ms, void *user_data);
 
 typedef uint32_t DispatcherAction;

@@ -11,10 +11,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(lr20xx_hal, CONFIG_LORA_LOG_LEVEL);
 
-/* Timeout for busy wait in milliseconds.
- * LR2021 should respond within a few ms after most commands.
- * After reset, firmware boot can take up to ~300ms.
- * Use 3000ms to be safe. */
+/* BUSY timeout; covers worst-case post-reset firmware boot (~300ms) with margin */
 #define LR20XX_BUSY_TIMEOUT_MS  3000
 
 /* Static state for DIO1 interrupt handling */
@@ -40,15 +37,11 @@ static uint16_t last_opcode;
 static int64_t last_cmd_time;
 
 /**
- * @brief Wait until BUSY pin goes low or timeout.
- *
- * Uses GPIO interrupt + semaphore instead of polling.  The CPU sleeps
- * while waiting, saving power during long BUSY periods (reset, firmware
- * commands).  Fast-path returns immediately when already ready.
+ * @brief Wait until BUSY deasserts, using GPIO IRQ + semaphore (not polling).
+ * Fast-path returns immediately if already idle.
  */
 static lr20xx_hal_status_t wait_on_busy(struct lr20xx_hal_context *ctx)
 {
-	/* Fast path: already ready */
 	if (!gpio_pin_get_dt(&ctx->busy)) {
 		return LR20XX_HAL_STATUS_OK;
 	}
@@ -56,8 +49,8 @@ static lr20xx_hal_status_t wait_on_busy(struct lr20xx_hal_context *ctx)
 	k_sem_reset(&busy_sem);
 	gpio_pin_interrupt_configure_dt(&ctx->busy, GPIO_INT_EDGE_TO_INACTIVE);
 
-	/* Re-check after enabling interrupt to close the race window where
-	 * BUSY dropped between our first check and the interrupt enable. */
+	/* Re-check after arming IRQ to close the race: BUSY may have dropped
+	 * between the first read and the interrupt enable. */
 	if (!gpio_pin_get_dt(&ctx->busy)) {
 		gpio_pin_interrupt_configure_dt(&ctx->busy, GPIO_INT_DISABLE);
 		return LR20XX_HAL_STATUS_OK;
@@ -78,7 +71,7 @@ static lr20xx_hal_status_t wait_on_busy(struct lr20xx_hal_context *ctx)
 }
 
 /**
- * @brief Check device ready, wake from sleep if needed.
+ * @brief Assert ready; if sleeping, issue NSS wake pulse first.
  */
 static lr20xx_hal_status_t check_device_ready(struct lr20xx_hal_context *ctx)
 {
@@ -86,19 +79,15 @@ static lr20xx_hal_status_t check_device_ready(struct lr20xx_hal_context *ctx)
 		return wait_on_busy(ctx);
 	}
 
-	/* Radio is sleeping — wake with NSS pulse.
-	 * NSS is ACTIVE_LOW: logical 1 = physical LOW = asserted. */
-	gpio_pin_set_dt(&ctx->nss, 1);  /* Assert NSS (pull LOW) */
-	k_busy_wait(10);
-	gpio_pin_set_dt(&ctx->nss, 0);  /* Deassert NSS (release HIGH) */
+	/* Wake from sleep: NSS pulse ≥10us per LR2021 datasheet §5.4.2 */
+	gpio_pin_set_dt(&ctx->nss, 1);
+	k_busy_wait(10);  /* ≥10us NSS hold; k_busy_wait unit is microseconds */
+	gpio_pin_set_dt(&ctx->nss, 0);
 
 	ctx->radio_is_sleeping = false;
 	return wait_on_busy(ctx);
 }
 
-/**
- * @brief DIO1 GPIO interrupt callback (ISR context)
- */
 static void dio1_isr_callback(const struct device *dev, struct gpio_callback *cb,
 			       uint32_t pins)
 {
@@ -111,40 +100,31 @@ static void dio1_isr_callback(const struct device *dev, struct gpio_callback *cb
 	}
 }
 
-/* Public HAL API - called by Semtech driver */
-
 int lr20xx_hal_init(struct lr20xx_hal_context *ctx)
 {
 	int ret;
 
 	ctx->radio_is_sleeping = false;
 
-	/* Configure NSS as output, inactive (deselected).
-	 * GPIO_OUTPUT_INACTIVE with GPIO_ACTIVE_LOW:
-	 * inactive = logical 0 = physical HIGH = chip deselected. */
 	ret = gpio_pin_configure_dt(&ctx->nss, GPIO_OUTPUT_INACTIVE);
 	if (ret < 0) {
 		LOG_ERR("Failed to configure NSS: %d", ret);
 		return ret;
 	}
 
-	/* Configure RESET as output, inactive (not in reset).
-	 * GPIO_OUTPUT_INACTIVE with GPIO_ACTIVE_LOW:
-	 * inactive = logical 0 = physical HIGH = reset released. */
 	ret = gpio_pin_configure_dt(&ctx->reset, GPIO_OUTPUT_INACTIVE);
 	if (ret < 0) {
 		LOG_ERR("Failed to configure RESET: %d", ret);
 		return ret;
 	}
 
-	/* Configure BUSY as input */
 	ret = gpio_pin_configure_dt(&ctx->busy, GPIO_INPUT);
 	if (ret < 0) {
 		LOG_ERR("Failed to configure BUSY: %d", ret);
 		return ret;
 	}
 
-	/* Set up BUSY interrupt callback (interrupt enabled on-demand by wait_on_busy) */
+	/* BUSY IRQ enabled on-demand by wait_on_busy() */
 	gpio_init_callback(&busy_gpio_cb, busy_isr_callback, BIT(ctx->busy.pin));
 	ret = gpio_add_callback(ctx->busy.port, &busy_gpio_cb);
 	if (ret < 0) {
@@ -152,14 +132,12 @@ int lr20xx_hal_init(struct lr20xx_hal_context *ctx)
 		return ret;
 	}
 
-	/* Configure DIO1 as input */
 	ret = gpio_pin_configure_dt(&ctx->dio1, GPIO_INPUT);
 	if (ret < 0) {
 		LOG_ERR("Failed to configure DIO1: %d", ret);
 		return ret;
 	}
 
-	/* Set up DIO1 interrupt callback */
 	gpio_init_callback(&dio1_gpio_cb, dio1_isr_callback, BIT(ctx->dio1.pin));
 	ret = gpio_add_callback(ctx->dio1.port, &dio1_gpio_cb);
 	if (ret < 0) {
@@ -189,8 +167,6 @@ void lr20xx_hal_disable_dio1_irq(struct lr20xx_hal_context *ctx)
 	gpio_pin_interrupt_configure_dt(&ctx->dio1, GPIO_INT_DISABLE);
 }
 
-/* Semtech HAL interface implementation */
-
 lr20xx_hal_status_t lr20xx_hal_write(const void *context, const uint8_t *command,
 				      const uint16_t command_length,
 				      const uint8_t *data, const uint16_t data_length)
@@ -218,10 +194,8 @@ lr20xx_hal_status_t lr20xx_hal_write(const void *context, const uint8_t *command
 		.count = (data_length > 0) ? 2 : 1,
 	};
 
-	/* Assert NSS (active LOW: logical 1 = physical LOW = chip selected) */
 	gpio_pin_set_dt(&ctx->nss, 1);
 	ret = spi_write(ctx->spi_dev, &ctx->spi_cfg, &tx);
-	/* Deassert NSS (logical 0 = physical HIGH = chip deselected) */
 	gpio_pin_set_dt(&ctx->nss, 0);
 
 	if (ret < 0) {
@@ -229,10 +203,10 @@ lr20xx_hal_status_t lr20xx_hal_write(const void *context, const uint8_t *command
 		return LR20XX_HAL_STATUS_ERROR;
 	}
 
-	/* Check for sleep command: opcode 0x0127 (LR2021 SetSleep) */
+	/* Opcode 0x0127 = SetSleep (LR2021 datasheet §5.4.2) */
 	if (command_length >= 2 && command[0] == 0x01 && command[1] == 0x27) {
 		ctx->radio_is_sleeping = true;
-		k_busy_wait(1000);  /* 1ms for sleep transition */
+		k_busy_wait(1000);  /* ≥500us sleep entry per datasheet §5.4.2 */
 		return LR20XX_HAL_STATUS_OK;
 	}
 
@@ -257,7 +231,6 @@ lr20xx_hal_status_t lr20xx_hal_read(const void *context, const uint8_t *command,
 		return LR20XX_HAL_STATUS_ERROR;
 	}
 
-	/* Step 1: Write command */
 	const struct spi_buf tx_buf = { .buf = (uint8_t *)command, .len = command_length };
 	const struct spi_buf_set tx = { .buffers = &tx_buf, .count = 1 };
 
@@ -274,13 +247,11 @@ lr20xx_hal_status_t lr20xx_hal_read(const void *context, const uint8_t *command,
 		return wait_on_busy(ctx);
 	}
 
-	/* Step 2: Wait for device ready, then read response */
 	if (check_device_ready(ctx) != LR20XX_HAL_STATUS_OK) {
 		return LR20XX_HAL_STATUS_ERROR;
 	}
 
-	/* LR2021 returns 2-byte Stat (16-bit) before response data.
-	 * LR11xx had 1 stat byte — LR2021 datasheet §5.4.1.2 says 16-bit. */
+	/* LR2021 prepends 2-byte stat header before response data (datasheet §5.4.1.2) */
 	uint8_t dummy[2];
 	const struct spi_buf rx_bufs[] = {
 		{ .buf = dummy, .len = sizeof(dummy) },
@@ -338,11 +309,8 @@ lr20xx_hal_status_t lr20xx_hal_direct_read_fifo(const void *context,
 		return LR20XX_HAL_STATUS_ERROR;
 	}
 
-	/* One-step FIFO read: write command + receive data in a single NSS
-	 * assertion.  MOSI carries the command during the first phase, then
-	 * zeros (NULL buf) during the data phase.  MISO is discarded (NULL)
-	 * during the command phase, then captured into data during the data
-	 * phase.  The nRF SPIM sends 0x00 bytes when TX buf is NULL. */
+	/* Single NSS assertion: command on MOSI, data on MISO, overlapped.
+	 * NULL tx buf causes nRF SPIM to send 0x00 during data phase. */
 	const struct spi_buf tx_bufs[] = {
 		{ .buf = (uint8_t *)command, .len = command_length },
 		{ .buf = NULL, .len = data_length },
@@ -372,16 +340,12 @@ lr20xx_hal_status_t lr20xx_hal_reset(const void *context)
 
 	LOG_INF("LR20xx reset: assert reset, hold 10ms");
 
-	/* Reset pin is ACTIVE_LOW in DTS:
-	 * gpio_pin_set_dt(..., 1) = logical assert = physical LOW = reset active
-	 * gpio_pin_set_dt(..., 0) = logical deassert = physical HIGH = reset released */
-	gpio_pin_set_dt(&ctx->reset, 1);  /* Assert reset */
-	k_msleep(10);
+	gpio_pin_set_dt(&ctx->reset, 1);
+	k_msleep(10);   /* ≥100us reset pulse per LR2021 datasheet §5.1 */
 
-	gpio_pin_set_dt(&ctx->reset, 0);  /* Deassert reset */
+	gpio_pin_set_dt(&ctx->reset, 0);
 
-	/* Wait 300ms for internal LR20xx firmware boot */
-	k_msleep(300);
+	k_msleep(300);  /* LR2021 firmware boot time per datasheet §5.1 */
 
 	LOG_INF("LR20xx reset complete, BUSY=%d", gpio_pin_get_dt(&ctx->busy));
 

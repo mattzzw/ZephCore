@@ -1,44 +1,22 @@
 # SPDX-License-Identifier: Apache-2.0
-# ZephCore Zephyr - full port
 
 cmake_minimum_required(VERSION 3.20.0)
 
 # ============================================================================
-# Zephyr Patch Auto-Apply (unified diffs via git apply)
+# Zephyr Patch Auto-Apply
 # ============================================================================
-# Patches are applied at configure time using `git apply`. This means:
-#   - If upstream changed in a conflicting area → build FAILS with clear error
-#   - If upstream changed in non-conflicting areas → changes are preserved
-#   - Idempotent: re-running cmake without west update detects already-applied patches
+# patches/zephyr/*.patch    — unified diffs applied via `git apply` at configure time
+# patches/zephyr-new/       — new files copied into the Zephyr tree (no upstream)
 #
-# Directory layout:
-#   patches/zephyr/*.patch       - unified diffs applied to the Zephyr tree
-#   patches/zephyr-new/          - new files copied to the Zephyr tree (no upstream)
+# Idempotent: stamp file tracks (patch hashes + target HEAD). Conflicts are fatal.
 #
-# Zephyr patches:
-#   0001-lora-lr11xx-build       - CMakeLists.txt + Kconfig (lr11xx subdirectory)
-#   0003-lora-sx126x-native      - native driver: DIO1 WQ, duty cycle, CRC fix,
-#                                  extension API, RF switch fix
-#   0005-gnss-air530z-easy       - EASY ephemeris prediction (PMTK869) + Kconfig
-#   0006-blobs-py                - west blobs command fix
-# New files (copied, not patched):
-#   drivers/lora/lr11xx/*        - LR11xx Zephyr LoRa driver
-#   drivers/lora/native/sx126x/sx126x_ext.h - SX126x extension API header
-#   dts/bindings/lora/semtech,lr1110.yaml - LR1110 DTS binding
-#
-
-# --- Helper: apply unified diff patches via git apply ---
 function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
     file(GLOB PATCH_FILES "${PATCH_DIR}/*.patch")
     list(SORT PATCH_FILES)
     if(NOT PATCH_FILES)
         return()
     endif()
-    # Stamp-based idempotency: hash of (patch contents + target git HEAD).
-    # If the stamp matches we already applied these exact patches to this exact
-    # tree state — skip.  A per-patch git apply --reverse --check fails for
-    # chained patches that touch the same file (N's reverse can't apply once
-    # N+1 is also present), so reverse-checking is not reliable here.
+    # Stamp = hash(patch contents + target HEAD). Skip if unchanged.
     execute_process(
         COMMAND git rev-parse HEAD
         WORKING_DIRECTORY "${TARGET_DIR}"
@@ -64,26 +42,23 @@ function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
     endif()
     foreach(PATCH_FILE ${PATCH_FILES})
         get_filename_component(PATCH_NAME ${PATCH_FILE} NAME)
-        # Verify patch applies cleanly
+        # Dry-run check
         execute_process(
             COMMAND git apply --check "${PATCH_FILE}"
             WORKING_DIRECTORY "${TARGET_DIR}"
             RESULT_VARIABLE PATCH_CHECK
             ERROR_VARIABLE PATCH_ERR
         )
-        # If forward-apply fails, the tree may have stale patches from a
-        # previous build (west update doesn't reset dirty files).  Extract
-        # the file list from the patch and git-checkout those paths to
-        # restore them to the clean upstream state, then re-check.
+        # Stale patches from previous build: reset affected files, retry
         if(NOT PATCH_CHECK EQUAL 0)
-            # git apply --numstat lists affected files (one per line)
+            # Extract affected file paths from numstat
             execute_process(
                 COMMAND git apply --numstat "${PATCH_FILE}"
                 WORKING_DIRECTORY "${TARGET_DIR}"
                 OUTPUT_VARIABLE PATCH_NUMSTAT
                 ERROR_QUIET
             )
-            # Parse file paths from numstat (format: "adds\tdels\tpath")
+            # numstat format: "adds\tdels\tpath"
             string(REGEX MATCHALL "[^\t\n]+\t[^\t\n]+\t[^\t\n]+" NUMSTAT_LINES "${PATCH_NUMSTAT}")
             set(PATCH_PATHS "")
             foreach(_line ${NUMSTAT_LINES})
@@ -97,7 +72,7 @@ function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
                     WORKING_DIRECTORY "${TARGET_DIR}"
                     ERROR_QUIET
                 )
-                # Re-check after reset
+                # Retry dry-run
                 execute_process(
                     COMMAND git apply --check "${PATCH_FILE}"
                     WORKING_DIRECTORY "${TARGET_DIR}"
@@ -117,7 +92,7 @@ function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
                 "  # Regenerate: git diff -- <file> > ${PATCH_FILE}\n"
             )
         endif()
-        # Apply the patch
+        # Apply
         execute_process(
             COMMAND git apply "${PATCH_FILE}"
             WORKING_DIRECTORY "${TARGET_DIR}"
@@ -132,11 +107,11 @@ function(zephcore_apply_patches PATCH_DIR TARGET_DIR LABEL)
     file(WRITE "${_stamp}" "${_stamp_hash}")
 endfunction()
 
-# Resolve target directories (before find_package(Zephyr) sets ZEPHYR_BASE)
+# Resolve target directories before find_package(Zephyr)
 get_filename_component(ZEPHYR_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../zephyr ABSOLUTE)
 get_filename_component(MODULES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../modules ABSOLUTE)
 
-# Apply unified diff patches to Zephyr tree
+# Apply patches
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/patches/zephyr)
     message(STATUS "Applying ZephCore patches to Zephyr...")
     zephcore_apply_patches(
@@ -146,7 +121,7 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/patches/zephyr)
     )
 endif()
 
-# Copy new files (no upstream equivalent) to Zephyr tree
+# Copy new files into Zephyr tree
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/patches/zephyr-new)
     file(GLOB_RECURSE ZEPHCORE_NEW_FILES
          RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/patches/zephyr-new
@@ -159,29 +134,13 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/patches/zephyr-new)
     endforeach()
 endif()
 
-# Add custom boards directory (for Wio Tracker L1, etc.)
-# Zephyr expects: <BOARD_ROOT>/boards/<vendor>/<board>/
-# Our structure: zephcore/boards/<mcu>/<board>/
-# So we add zephcore/ as BOARD_ROOT, and Zephyr finds boards/nrf52840/wio_tracker_l1/
+# Custom board root: boards/<mcu>/<board>/ discovered via BOARD_ROOT
 list(APPEND BOARD_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ========== Board Configuration Hierarchy ==========
-# Include order: prj.conf → zephcore_common.conf → <platform>_common.conf → <board>/board.conf
-#
-# Structure:
-#   boards/common/zephcore_common.conf  - ALL boards (crypto, sensors, LoRa)
-#   boards/common/nrf52_common.conf     - nRF52 boards (BLE, flash, GNSS)
-#   boards/<board>/board.conf           - Board-specific (pins, features)
-#   boards/<board>/prod.conf            - Production overrides (optional)
-#
-# To add a new board:
-#   1. Create boards/<board>/board.conf with pins and unique features
-#   2. Create boards/<board>/board.overlay with hardware definitions
-#   3. Build: west build -b <board> zephcore --pristine
+# prj.conf → zephcore_common.conf → <platform>_common.conf → <board>/board.conf
 
-# Under sysbuild, BOARD and EXTRA_CONF_FILE are stored in a cache file that
-# find_package(Zephyr) loads later. We need them NOW for config hierarchy
-# detection. Read them directly from the sysbuild cache file.
+# Recover BOARD and EXTRA_CONF_FILE from sysbuild cache (needed before find_package)
 if(NOT BOARD AND DEFINED SYSBUILD_CACHE AND EXISTS "${SYSBUILD_CACHE}")
     file(STRINGS "${SYSBUILD_CACHE}" _sysbuild_strings ENCODING UTF-8)
     foreach(_str ${_sysbuild_strings})

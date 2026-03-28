@@ -12,7 +12,6 @@
 LOG_MODULE_REGISTER(zephcore_dispatcher, CONFIG_ZEPHCORE_LORA_LOG_LEVEL);
 
 #if IS_ENABLED(CONFIG_ZEPHCORE_PACKET_LOGGING)
-/* Payload types for [src -> dest] logging */
 #define PAYLOAD_TYPE_REQ         0x00
 #define PAYLOAD_TYPE_RESPONSE    0x01
 #define PAYLOAD_TYPE_TXT_MSG     0x02
@@ -21,7 +20,7 @@ LOG_MODULE_REGISTER(zephcore_dispatcher, CONFIG_ZEPHCORE_LORA_LOG_LEVEL);
 
 namespace mesh {
 
-#define MAX_RX_DELAY_MILLIS   32000
+#define MAX_RX_DELAY_MILLIS   32000  /* upper bound for score-based RX delay */
 
 Dispatcher::Dispatcher(Radio &radio, MillisecondClock &ms, PacketManager &mgr)
 	: _radio(&radio), _ms(&ms), _mgr(&mgr)
@@ -54,7 +53,7 @@ void Dispatcher::begin()
 
 uint8_t Dispatcher::getDutyCyclePercent() const
 {
-	return 10;
+	return 10; /* EU 868 default: 10% duty cycle */
 }
 
 bool Dispatcher::isAdminPacket(const Packet *pkt)
@@ -66,8 +65,7 @@ bool Dispatcher::isAdminPacket(const Packet *pkt)
 
 int Dispatcher::calcRxDelay(float score, uint32_t air_time) const
 {
-	/* Lookup table: (10^(0.85 - i*0.1) - 1) for i=0..10 (score 0.0 to 1.0)
-	 * Replaces powf() to save ~1.9KB flash. Linear interpolation between entries. */
+	/* LUT: 10^(0.85 - i*0.1) - 1, i=0..10; replaces powf() (~1.9KB saved) */
 	static const float lut[11] = {
 		6.0793f, 4.6236f, 3.4674f, 2.5489f, 1.8184f, 1.2389f,
 		0.7783f, 0.4125f, 0.1220f, -0.1089f, -0.2921f
@@ -83,12 +81,12 @@ int Dispatcher::calcRxDelay(float score, uint32_t air_time) const
 
 uint32_t Dispatcher::getCADFailRetryDelay() const
 {
-	return 200;
+	return 200; /* ms between CAD retries; ~2 LoRa symbol periods at SF8/62.5k */
 }
 
 uint32_t Dispatcher::getCADFailMaxDuration() const
 {
-	return 4000;
+	return 4000; /* ms; ~20 retry attempts before giving up */
 }
 
 void Dispatcher::loop()
@@ -130,14 +128,10 @@ void Dispatcher::loop()
 
 void Dispatcher::maintenanceLoop()
 {
-	/* Noise floor calibration — one EMA tick per housekeeping cycle */
 	_radio->triggerNoiseFloorCalibrate(getInterferenceThreshold());
 
-	/* RX mode watchdog — detect if radio is stuck in neither RX nor TX.
-	 * Count TX time as "active" so rapid consecutive relays on a busy
-	 * repeater don't falsely trigger the flag: the housekeeping timer
-	 * (5 s) can miss brief RX windows between TXes, leaving
-	 * radio_nonrx_start stale and firing the watchdog spuriously. */
+	/* RX mode watchdog: TX counts as "active" to avoid false triggers
+	 * when the 5s housekeeping timer misses brief RX windows. */
 	bool is_active = _radio->isInRecvMode() || !_radio->isSendComplete();
 	if (is_active != prev_isrecv_mode) {
 		prev_isrecv_mode = is_active;
@@ -145,11 +139,11 @@ void Dispatcher::maintenanceLoop()
 			radio_nonrx_start = (uint32_t)_ms->getMillis();
 		}
 	}
-	if (!is_active && (uint32_t)_ms->getMillis() - radio_nonrx_start > 8000) {
+	if (!is_active && (uint32_t)_ms->getMillis() - radio_nonrx_start > 8000) { /* 8s stall threshold */
 		_err_flags |= ERR_EVENT_STARTRX_TIMEOUT;
 	}
 
-	/* AGC reset — periodic warm sleep + recalibration */
+	/* Periodic AGC recalibration */
 	if (getAGCResetInterval() > 0 && millisHasNowPassed(next_agc_reset_time)) {
 		_radio->resetAGC();
 		next_agc_reset_time = futureMillis(getAGCResetInterval());
@@ -175,7 +169,7 @@ bool Dispatcher::tryParsePacket(Packet *pkt, const uint8_t *raw, int len)
 
 	pkt->path_len = raw[i++];
 	uint8_t path_mode = pkt->path_len >> 6;
-	if (path_mode == 3) {   // Reserved for future
+	if (path_mode == 3) {   /* reserved path mode */
 		LOG_WRN("tryParsePacket: unsupported path mode: 3");
 		return false;
 	}
@@ -200,14 +194,13 @@ bool Dispatcher::tryParsePacket(Packet *pkt, const uint8_t *raw, int len)
 
 void Dispatcher::checkRecv()
 {
-	/* Drain ALL queued LoRa packets per wake.
-	 * k_event is a bitfield (not a counter), so multiple ISR arrivals
-	 * may only produce one wake.  We must empty the ring each time. */
+	/* k_event is a bitfield — multiple ISR arrivals coalesce into one
+	 * wake, so drain the entire ring each time. */
 	for (;;) {
 		uint8_t raw[MAX_TRANS_UNIT + 1];
 		int len = _radio->recvRaw(raw, MAX_TRANS_UNIT);
 		if (len <= 0) {
-			break;  /* ring empty — done */
+			break;
 		}
 
 		logRxRaw(_radio->getLastSNR(), _radio->getLastRSSI(), raw, len);
@@ -222,7 +215,7 @@ void Dispatcher::checkRecv()
 		uint32_t air_time = 0;
 
 		if (tryParsePacket(pkt, raw, len)) {
-			pkt->_snr = (int8_t)(_radio->getLastSNR() * 4.0f);
+			pkt->_snr = (int8_t)(_radio->getLastSNR() * 4.0f); /* x4 fixed-point SNR */
 			score = _radio->packetScore(_radio->getLastSNR(), len);
 			air_time = _radio->getEstAirtimeFor(len);
 			rx_air_time += air_time;

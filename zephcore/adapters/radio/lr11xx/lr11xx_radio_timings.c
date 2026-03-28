@@ -50,14 +50,10 @@
  * --- PRIVATE CONSTANTS -------------------------------------------------------
  */
 
-/**
- * @brief Time in microsecond taken by the chip to process the Rx done interrupt
- */
+/** @brief Chip processing delay from last bit received to RxDone IRQ assertion (SWDR001 §6.1) */
 #define RX_DONE_IRQ_PROCESSING_TIME_IN_US 74
 
-/**
- * @brief Time in microsecond taken by the chip to process the Tx done interrupt
- */
+/** @brief Chip processing delay from last bit transmitted to TxDone IRQ assertion (SWDR001 §6.1) */
 #define TX_DONE_IRQ_PROCESSING_TIME_IN_US 111
 
 /*
@@ -201,26 +197,19 @@ static uint32_t lr11xx_radio_timings_get_pa_ramp_time_in_us( const lr11xx_radio_
     }
 }
 
+/* RX input pipeline delay by bandwidth (SWDR001 §6.1, characterised values) */
 static uint32_t lr11xx_radio_timings_get_lora_rx_input_delay_in_us( lr11xx_radio_lora_bw_t bw )
 {
     switch( bw )
     {
     case LR11XX_RADIO_LORA_BW_500:
-    {
-        return 16;
-    }
+        return 16;   /* 500 kHz: 16µs */
     case LR11XX_RADIO_LORA_BW_250:
-    {
-        return 31;
-    }
+        return 31;   /* 250 kHz: 31µs */
     case LR11XX_RADIO_LORA_BW_125:
-    {
-        return 57;
-    }
+        return 57;   /* 125 kHz: 57µs */
     default:
-    {
         return 0;
-    }
     }
 }
 

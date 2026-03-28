@@ -95,9 +95,7 @@
 #define LR11XX_RADIO_SET_LORA_SYNC_WORD_CMD_LENGTH ( 2 + 1 )
 #define LR11XX_RADIO_GET_LORA_RX_INFO_CMD_LENGTH ( 2 )
 
-/**
- * @brief Internal RTC frequency
- */
+/** @brief RTC clock frequency in Hz; timeout_ms = steps / 32.768 (SWDR001 §3.3) */
 #define LR11XX_RTC_FREQ_IN_HZ 32768UL
 
 /*
@@ -274,9 +272,11 @@ lr11xx_status_t lr11xx_radio_get_gfsk_pkt_status( const void* context, lr11xx_ra
 
     if( status == LR11XX_STATUS_OK )
     {
+        /* RSSI encoding: raw = -2 * dBm (LR11XX SWDR001 §5.8.4) */
         pkt_status->rssi_sync_in_dbm = -( int8_t ) ( rbuffer[0] >> 1 );
         pkt_status->rssi_avg_in_dbm  = -( int8_t ) ( rbuffer[1] >> 1 );
         pkt_status->rx_len_in_bytes  = rbuffer[2];
+        /* Status byte 3 bit field layout per SWDR001 §5.8.4 */
         pkt_status->is_addr_err      = ( ( rbuffer[3] & 0x20 ) != 0 ) ? true : false;
         pkt_status->is_crc_err       = ( ( rbuffer[3] & 0x10 ) != 0 ) ? true : false;
         pkt_status->is_len_err       = ( ( rbuffer[3] & 0x08 ) != 0 ) ? true : false;
@@ -301,8 +301,9 @@ lr11xx_status_t lr11xx_radio_get_lora_pkt_status( const void* context, lr11xx_ra
 
     if( status == LR11XX_STATUS_OK )
     {
+        /* RSSI encoding: raw = -2 * dBm; SNR encoding: raw = 4 * dB (SWDR001 §5.8.5) */
         pkt_status->rssi_pkt_in_dbm        = -( int8_t ) ( rbuffer[0] >> 1 );
-        pkt_status->snr_pkt_in_db          = ( ( ( int8_t ) rbuffer[1] ) + 2 ) >> 2;
+        pkt_status->snr_pkt_in_db          = ( ( ( int8_t ) rbuffer[1] ) + 2 ) >> 2;  /* round to nearest dB */
         pkt_status->signal_rssi_pkt_in_dbm = -( int8_t ) ( rbuffer[2] >> 1 );
     }
 
@@ -322,7 +323,7 @@ lr11xx_status_t lr11xx_radio_get_rssi_inst( const void* context, int8_t* rssi_in
 
     if( status == LR11XX_STATUS_OK )
     {
-        *rssi_in_dbm = -( int8_t ) ( rssi >> 1 );
+        *rssi_in_dbm = -( int8_t ) ( rssi >> 1 );  /* raw = -2 * dBm (SWDR001 §5.8.3) */
     }
 
     return status;
@@ -371,6 +372,9 @@ lr11xx_status_t lr11xx_radio_set_lora_sync_word( const void* context, const uint
 lr11xx_status_t lr11xx_radio_set_lora_public_network( const void*                            context,
                                                       const lr11xx_radio_lora_network_type_t network_type )
 {
+    /* Deprecated — use lr11xx_radio_set_lora_sync_word for FW ≥ 0x303.
+     * cbuffer is oversized (LR11XX_RADIO_SET_LORA_PUBLIC_NETWORK_CMD_LENGTH = 10)
+     * but only 3 bytes are transmitted (opcode + 1 param), matching actual protocol. */
     const uint8_t cbuffer[LR11XX_RADIO_SET_LORA_PUBLIC_NETWORK_CMD_LENGTH] = {
         ( uint8_t ) ( LR11XX_RADIO_SET_LORA_PUBLIC_NETWORK_OC >> 8 ),
         ( uint8_t ) ( LR11XX_RADIO_SET_LORA_PUBLIC_NETWORK_OC >> 0 ),
@@ -1062,8 +1066,7 @@ uint32_t lr11xx_radio_get_lora_time_on_air_in_ms( const lr11xx_radio_pkt_params_
 {
     uint32_t numerator   = 1000U * lr11xx_radio_get_lora_time_on_air_numerator( pkt_p, mod_p );
     uint32_t denominator = lr11xx_radio_get_lora_bw_in_hz( mod_p->bw );
-    // Perform integral ceil()
-    return ( numerator + denominator - 1 ) / denominator;
+    return ( numerator + denominator - 1 ) / denominator;  /* integer ceil */
 }
 
 uint32_t lr11xx_radio_get_gfsk_time_on_air_numerator( const lr11xx_radio_pkt_params_gfsk_t* pkt_p )
@@ -1105,9 +1108,7 @@ uint32_t lr11xx_radio_get_gfsk_time_on_air_in_ms( const lr11xx_radio_pkt_params_
 {
     uint32_t numerator   = 1000U * lr11xx_radio_get_gfsk_time_on_air_numerator( pkt_p );
     uint32_t denominator = mod_p->br_in_bps;
-
-    // Perform integral ceil()
-    return ( numerator + denominator - 1 ) / denominator;
+    return ( numerator + denominator - 1 ) / denominator;  /* integer ceil */
 }
 
 uint32_t lr11xx_radio_convert_time_in_ms_to_rtc_step( uint32_t time_in_ms )
@@ -1128,6 +1129,7 @@ lr11xx_status_t lr11xx_radio_get_lora_rx_info( const void* context, bool* is_crc
 
     if( status == LR11XX_STATUS_OK )
     {
+        /* Response byte layout per SWDR001: bit[4] = CRC present, bits[2:0] = CR */
         *is_crc_present = ( ( ( rbuffer & ( 0x01 << 4 ) ) != 0 ) ) ? true : false;
         *cr             = ( lr11xx_radio_lora_cr_t ) ( rbuffer & 0x07 );
     }
@@ -1137,6 +1139,8 @@ lr11xx_status_t lr11xx_radio_get_lora_rx_info( const void* context, bool* is_crc
 
 lr11xx_status_t lr11xx_radio_apply_high_acp_workaround( const void* context )
 {
+    /* Clear bit 30 of internal PA register 0x00F30054 to reduce adjacent channel power.
+     * Required before SetRx/SetTx/SetCad on affected silicon (Semtech appnote). */
     return lr11xx_regmem_write_regmem32_mask( context, 0x00F30054, 1 << 30, 0 << 30 );
 }
 

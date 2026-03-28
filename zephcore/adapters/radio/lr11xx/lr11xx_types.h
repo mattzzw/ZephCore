@@ -50,7 +50,7 @@
  * --- PUBLIC CONSTANTS --------------------------------------------------------
  */
 
-#define LR11XX_CMD_LENGTH_MAX ( 512 )
+#define LR11XX_CMD_LENGTH_MAX ( 512 )  /* maximum SPI command frame length in bytes (SWDR001 §3.1) */
 
 /*
  * -----------------------------------------------------------------------------
@@ -63,7 +63,7 @@
 typedef enum lr11xx_status_e
 {
     LR11XX_STATUS_OK    = 0,
-    LR11XX_STATUS_ERROR = 3,
+    LR11XX_STATUS_ERROR = 3,  /* matches lr11xx_hal_status_t ERROR value */
 } lr11xx_status_t;
 
 /*

@@ -75,12 +75,12 @@
 #define LR11XX_SYSTEM_READ_UID_CMD_LENGTH ( 2 )
 #define LR11XX_SYSTEM_READ_JOIN_EUI_CMD_LENGTH ( 2 )
 #define LR11XX_SYSTEM_READ_PIN_CMD_LENGTH ( 2 )
-#define LR11XX_SYSTEM_READ_PIN_CUSTOM_EUI_CMD_LENGTH ( LR11XX_SYSTEM_READ_PIN_CMD_LENGTH + 17 )
+#define LR11XX_SYSTEM_READ_PIN_CUSTOM_EUI_CMD_LENGTH ( LR11XX_SYSTEM_READ_PIN_CMD_LENGTH + 17 )  /* +8 device_eui +8 join_eui +1 rfu */
 #define LR11XX_SYSTEM_GET_RANDOM_CMD_LENGTH ( 2 )
-#define LR11XX_SYSTEM_ENABLE_SPI_CRC_CMD_LENGTH ( 3 )
-#define LR11XX_SYSTEM_DRIVE_DIO_IN_SLEEP_MODE_CMD_LENGTH ( 3 )
+#define LR11XX_SYSTEM_ENABLE_SPI_CRC_CMD_LENGTH ( 3 )           /* 2 opcode + 1 param */
+#define LR11XX_SYSTEM_DRIVE_DIO_IN_SLEEP_MODE_CMD_LENGTH ( 3 )  /* 2 opcode + 1 param */
 
-#define LR11XX_SYSTEM_GET_STATUS_DIRECT_READ_LENGTH ( 6 )
+#define LR11XX_SYSTEM_GET_STATUS_DIRECT_READ_LENGTH ( 6 )  /* stat1 + stat2 + 4-byte IRQ mask */
 
 /*
  * -----------------------------------------------------------------------------
@@ -131,20 +131,7 @@ enum
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
  */
 
-/*!
- * @brief Fill stat1 structure with data from stat1_byte
- *
- * @param [in]  stat1_byte stat1 byte
- * @param [out] stat1      stat1 structure
- */
 static void lr11xx_system_convert_stat1_byte_to_enum( uint8_t stat1_byte, lr11xx_system_stat1_t* stat1 );
-
-/*!
- * @brief Fill stat2 structure with data from stat2_byte
- *
- * @param [in]  stat2_byte stat2 byte
- * @param [out] stat2      stat2 structure
- */
 static void lr11xx_system_convert_stat2_byte_to_enum( uint8_t stat2_byte, lr11xx_system_stat2_t* stat2 );
 
 /*
@@ -277,10 +264,9 @@ lr11xx_status_t lr11xx_system_calibrate_image( const void* context, const uint8_
 lr11xx_status_t lr11xx_system_calibrate_image_in_mhz( const void* context, const uint16_t freq1_in_mhz,
                                                       const uint16_t freq2_in_mhz )
 {
-    // Perform a floor() to get a value for freq1 corresponding to a frequency lower than or equal to freq1_in_mhz
+    /* Floor: freq1 step ≤ freq1_in_mhz */
     const uint8_t freq1 = freq1_in_mhz / LR11XX_SYSTEM_IMAGE_CALIBRATION_STEP_IN_MHZ;
-
-    // Perform a ceil() to get a value for freq2 corresponding to a frequency higher than or equal to freq2_in_mhz
+    /* Ceil: freq2 step ≥ freq2_in_mhz */
     const uint8_t freq2 = ( freq2_in_mhz + LR11XX_SYSTEM_IMAGE_CALIBRATION_STEP_IN_MHZ - 1 ) /
                           LR11XX_SYSTEM_IMAGE_CALIBRATION_STEP_IN_MHZ;
 
@@ -391,7 +377,7 @@ lr11xx_status_t lr11xx_system_reboot( const void* context, const bool stay_in_bo
     const uint8_t cbuffer[LR11XX_SYSTEM_REBOOT_CMD_LENGTH] = {
         ( uint8_t ) ( LR11XX_SYSTEM_REBOOT_OC >> 8 ),
         ( uint8_t ) ( LR11XX_SYSTEM_REBOOT_OC >> 0 ),
-        ( stay_in_bootloader == true ) ? 0x03 : 0x00,
+        ( stay_in_bootloader == true ) ? 0x03 : 0x00,  /* 0x03 = bootloader, 0x00 = flash (SWDR001 §3.2) */
     };
 
     return ( lr11xx_status_t ) lr11xx_hal_write( context, cbuffer, LR11XX_SYSTEM_REBOOT_CMD_LENGTH, 0, 0 );
@@ -433,7 +419,7 @@ lr11xx_status_t lr11xx_system_set_sleep( const void* context, const lr11xx_syste
     const uint8_t cbuffer[LR11XX_SYSTEM_SET_SLEEP_CMD_LENGTH] = {
         ( uint8_t ) ( LR11XX_SYSTEM_SET_SLEEP_OC >> 8 ),
         ( uint8_t ) ( LR11XX_SYSTEM_SET_SLEEP_OC >> 0 ),
-        ( sleep_cfg.is_rtc_timeout << 1 ) + sleep_cfg.is_warm_start,
+        ( sleep_cfg.is_rtc_timeout << 1 ) + sleep_cfg.is_warm_start,  /* bit[1]=RTC, bit[0]=warm start */
         ( uint8_t ) ( sleep_time >> 24 ),
         ( uint8_t ) ( sleep_time >> 16 ),
         ( uint8_t ) ( sleep_time >> 8 ),
@@ -637,6 +623,7 @@ lr11xx_status_t lr11xx_system_drive_dio_in_sleep_mode( const void* context, bool
  * --- PRIVATE FUNCTIONS DEFINITION --------------------------------------------
  */
 
+/* Stat1 byte layout per SWDR001: bit[0] = IRQ active, bits[2:1] = cmd_status */
 static void lr11xx_system_convert_stat1_byte_to_enum( uint8_t stat1_byte, lr11xx_system_stat1_t* stat1 )
 {
     if( stat1 != NULL )
@@ -646,6 +633,7 @@ static void lr11xx_system_convert_stat1_byte_to_enum( uint8_t stat1_byte, lr11xx
     }
 }
 
+/* Stat2 byte layout per SWDR001: bit[0] = flash, bits[3:1] = chip_mode, bits[7:4] = reset_status */
 static void lr11xx_system_convert_stat2_byte_to_enum( uint8_t stat2_byte, lr11xx_system_stat2_t* stat2 )
 {
     if( stat2 != NULL )

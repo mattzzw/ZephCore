@@ -2,12 +2,8 @@
  * SPDX-License-Identifier: Apache-2.0
  * NodePrefs - persisted node configuration (unified for all roles)
  *
- * Matches Arduino MeshCore's single NodePrefs struct.
- * Both companion and repeater use this same type. Role-specific
- * fields are simply unused by the other role.
- *
- * Storage format is field-by-field (not raw memcpy), so struct
- * layout doesn't affect on-disk compatibility.
+ * Serialized field-by-field, not raw memcpy; struct layout does
+ * not affect on-disk compatibility.
  */
 
 #pragma once
@@ -37,13 +33,13 @@ struct NodePrefs {
 	float freq;
 	int8_t tx_power_dbm;
 	uint8_t disable_fwd;            // repeater: disable forwarding
-	uint8_t advert_interval;        // minutes / 2
+	uint8_t advert_interval;        // stored as minutes / 2
 	uint8_t flood_advert_interval;  // hours
 	float rx_delay_base;
 	float tx_delay_factor;
 	char guest_password[16];
 	float direct_tx_delay_factor;
-	float backoff_multiplier;       // reactive backoff cap (0.0 = sentinel → use default 0.5)
+	float backoff_multiplier;       // per-dupe reactive backoff (0.0 = disabled)
 	uint32_t guard;
 	uint8_t sf;
 	uint8_t cr;
@@ -52,7 +48,7 @@ struct NodePrefs {
 	float bw;
 	uint8_t flood_max;
 	uint8_t interference_threshold;
-	uint8_t agc_reset_interval;     // secs / 4
+	uint8_t agc_reset_interval;     // stored as secs / 4
 	// Power saving
 	uint8_t powersaving_enabled;
 	// GPS settings
@@ -62,12 +58,12 @@ struct NodePrefs {
 	uint32_t discovery_mod_timestamp;
 	float adc_multiplier;
 	char owner_info[120];
-	uint8_t rx_boost;               // 1 = boosted RX gain (+3dB, +2mA), 0 = power save
-	uint8_t rx_duty_cycle;          // 1 = RX duty cycle (power save), 0 = continuous RX
-	uint8_t apc_enabled;            // 1 = adaptive power control on, 0 = fixed TX power
-	uint8_t apc_margin;             // APC target link margin in dB (6-30, default 16)
+	uint8_t rx_boost;               // 1 = boosted RX gain (+3dB), 0 = power save
+	uint8_t rx_duty_cycle;          // 1 = RX duty cycle, 0 = continuous RX
+	uint8_t apc_enabled;            // 1 = APC on, 0 = fixed TX power
+	uint8_t apc_margin;             // APC target link margin dB (6-30)
 
-	/* ---- Companion-only fields (Zephyr additions, not in Arduino) ---- */
+	/* ---- Companion-only fields ---- */
 	uint8_t manual_add_contacts;
 	uint8_t telemetry_mode_base;
 	uint8_t telemetry_mode_loc;
@@ -75,19 +71,17 @@ struct NodePrefs {
 	uint32_t ble_pin;
 	uint8_t buzzer_quiet;
 	uint8_t autoadd_config;
-	uint8_t client_repeat;          // 1 = offgrid mode (forward packets), 0 = companion only
-	uint8_t path_hash_mode;         // which path mode to use when sending (0-2)
-	uint8_t autoadd_max_hops;       // 0 = no limit, 1 = direct (0 hops), N = up to N-1 hops (max 64)
-	uint8_t loop_detect;            // LOOP_DETECT_OFF/MINIMAL/MODERATE/STRICT
-	uint8_t leds_disabled;          // 1 = LEDs off (heartbeat disabled), 0 = LEDs on
+	uint8_t client_repeat;          // 1 = offgrid mode (forward packets)
+	uint8_t path_hash_mode;         // path mode 0-2
+	uint8_t autoadd_max_hops;       // 0 = no limit, N = up to N-1 hops
+	uint8_t loop_detect;            // LOOP_DETECT_{OFF,MINIMAL,MODERATE,STRICT}
+	uint8_t leds_disabled;          // 1 = LEDs off
 };
 
-/* Default prefs — MUST match LoRaConfig.h defaults for radio interop.
- * Used by both roles; each role's data store calls this on first boot. */
+/* Default prefs -- must match LoRaConfig.h defaults for radio interop. */
 static inline void initNodePrefs(NodePrefs* prefs) {
 	memset(prefs, 0, sizeof(NodePrefs));
-	prefs->airtime_factor = 10.0f;  /* 10% duty cycle (EU 868 default) */
-	/* node_name left empty — each role sets its own default name */
+	prefs->airtime_factor = 10.0f;  /* 10% duty cycle */
 	prefs->node_lat = 0.0;
 	prefs->node_lon = 0.0;
 #ifdef CONFIG_ZEPHCORE_ADMIN_PASSWORD

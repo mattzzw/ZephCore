@@ -49,21 +49,13 @@
  * --- PRIVATE MACROS-----------------------------------------------------------
  */
 
-/**
- * @brief Internal RTC frequency
- */
+/* LR2021 internal RTC: 32.768kHz (datasheet §5.3) */
 #define LR20XX_RTC_FREQ_IN_HZ ( 32768UL )
 
-/*!
- * @brief Frequency step in Hz used to compute the front end calibration parameter
- *
- * @see lr20xx_radio_common_calibrate_front_end_helper
- */
+/* Front-end calibration granularity: 4MHz steps (LR2021 datasheet §5.5.1) */
 #define LR20XX_RADIO_COMMON_FRONT_END_CALIBRATION_STEP_IN_HZ ( 4000000u )
 
-/**
- * Register address holding the LQI value
- */
+/* LR2021 register: LQI (Link Quality Indicator) — Semtech SWDR001 register map */
 #define LR20XX_RADIO_COMMON_REGISTER_LQI ( 0xF30C38 )
 
 /*
@@ -153,27 +145,13 @@ enum
  * --- PRIVATE FUNCTIONS DECLARATION -------------------------------------------
  */
 
-/*!
- * @brief Serialize an RSSI calibration item into an array
- *
- * @param array Pointer to the array to write to. It is up to the caller to ensure the array is long enough to store the
- * serialized item
- * @param rssi_calibration_item Pointer to the RSSI calibration item to serialize. It is up to the caller to ensure it
- * points to an actual item.
- * @return uint8_t* Pointer to the next memory slot to write
- */
+/* Serialize one RSSI calibration gain item; returns pointer past written data.
+ * Caller ensures array has sufficient space. */
 uint8_t* lr20xx_radio_common_serialize_rssi_calibration_item(
     uint8_t* array, const lr20xx_radio_common_rssi_calibration_gain_item_t* rssi_calibration_item );
 
-/**
- * @brief Serialize an RSSI calibration table into an array
- *
- * @param array Pointer to the array to write to. It is up to the caller to ensure the array is long enough to store the
- * serialized table
- * @param rssi_calibration_table Pointer to the calibration table to serialize. Can be NULL, in which case nothing is
- * written to the array
- * @return uint8_t* Pointer to the next memory slot to write
- */
+/* Serialize a full RSSI calibration gain table; no-op if rssi_calibration_table is NULL.
+ * Returns pointer past written data. */
 uint8_t* lr20xx_radio_common_serialize_rssi_calibration_table(
     uint8_t* array, const lr20xx_radio_common_rssi_calibration_gain_table_t* rssi_calibration_table );
 
@@ -218,7 +196,7 @@ lr20xx_status_t lr20xx_radio_common_calibrate_front_end_helper(
         const uint32_t freq_hz = front_end_calibration_structures[front_end_calibration_value_index].frequency_in_hertz;
         const lr20xx_radio_common_rx_path_t rx_path =
             front_end_calibration_structures[front_end_calibration_value_index].rx_path;
-        // Perform a ceil() to get a value for freq_4mhz corresponding to a frequency higher than or equal to freq_hz
+        /* ceil(freq_hz / 4MHz): calibrate at next 4MHz boundary ≥ freq_hz */
         const uint16_t freq_4mhz =
             ( uint16_t ) ( ( freq_hz + LR20XX_RADIO_COMMON_FRONT_END_CALIBRATION_STEP_IN_HZ - 1u ) /
                           LR20XX_RADIO_COMMON_FRONT_END_CALIBRATION_STEP_IN_HZ );

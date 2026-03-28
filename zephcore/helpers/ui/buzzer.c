@@ -29,18 +29,14 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(buzzer, CONFIG_ZEPHCORE_BOARD_LOG_LEVEL);
 
-/* ========== Dedicated Buzzer Work Queue ========== */
-/* Runs note scheduling at high priority so flash/BLE/FS operations
- * on the system workqueue can't delay tone timing. */
+/* Dedicated work queue — high priority prevents flash/BLE/FS delays */
 #define BUZZER_WQ_STACK_SIZE 512
-#define BUZZER_WQ_PRIORITY   2  /* Higher than default workqueue (usually 10+) */
+#define BUZZER_WQ_PRIORITY   2  /* above default wq (~10+) */
 
 K_THREAD_STACK_DEFINE(buzzer_wq_stack, BUZZER_WQ_STACK_SIZE);
 static struct k_work_q buzzer_wq;
 
-/* Maximum duration (ms) a single tone can play before auto-silence.
- * Safety net: if the work queue stalls or the handler doesn't fire,
- * the hardware timer kills the PWM after this timeout. */
+/* Safety watchdog: auto-silence if note handler stalls */
 #define BUZZER_TONE_MAX_MS  2000
 
 /* ========== Note Frequency Table ========== */

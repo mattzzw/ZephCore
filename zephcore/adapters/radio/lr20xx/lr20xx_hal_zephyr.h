@@ -20,37 +20,28 @@ extern "C" {
 #include "lr20xx_hal.h"
 
 /**
- * @brief LR20xx HAL context for Zephyr
+ * @brief LR20xx HAL context — passed as 'context' to all lr20xx_hal_* functions.
  *
- * Passed as the 'context' pointer to all lr20xx_hal_* functions.
- * Contains all hardware configuration needed to communicate with the radio.
- *
- * CRITICAL: All SPI operations must be protected by the driver's spi_mutex.
- * The LR2021 radio is accessed from two threads (main event loop + DIO1 work
- * queue).  Without the mutex, concurrent SPI access corrupts the command/response
- * protocol and the BUSY pin gets stuck HIGH permanently.
+ * WARNING: All SPI operations must be serialized. The LR2021 is accessed from
+ * two threads (main event loop + DIO1 work queue). Concurrent SPI access will
+ * corrupt the command/response protocol and permanently stick BUSY HIGH.
  */
 struct lr20xx_hal_context {
-	/* SPI device */
 	const struct device *spi_dev;
 	struct spi_config spi_cfg;
 
-	/* GPIO pins */
-	struct gpio_dt_spec nss;    /* Chip select (direct GPIO, not SPI peripheral CS) */
-	struct gpio_dt_spec reset;  /* Reset pin (active-low) */
-	struct gpio_dt_spec busy;   /* Busy pin (high = busy) */
-	struct gpio_dt_spec dio1;   /* DIO1 interrupt pin */
+	struct gpio_dt_spec nss;    /* Chip select (direct GPIO, not SPI controller CS) */
+	struct gpio_dt_spec reset;  /* Reset (active-low) */
+	struct gpio_dt_spec busy;   /* BUSY: high = chip processing command */
+	struct gpio_dt_spec dio1;   /* DIO1 interrupt */
 
-	/* State tracking */
 	volatile bool radio_is_sleeping;
 };
 
 /**
- * @brief Initialize HAL context GPIOs
+ * @brief Initialize HAL context GPIOs. Must be called before any other HAL function.
  *
- * Must be called before any other HAL functions.
- *
- * @param ctx HAL context with gpio specs already filled in
+ * @param ctx HAL context with gpio specs filled in
  * @return 0 on success, negative errno on failure
  */
 int lr20xx_hal_init(struct lr20xx_hal_context *ctx);
@@ -61,11 +52,7 @@ int lr20xx_hal_init(struct lr20xx_hal_context *ctx);
 typedef void (*lr20xx_dio1_callback_t)(void *user_data);
 
 /**
- * @brief Set DIO1 interrupt callback
- *
- * @param ctx HAL context
- * @param cb  Callback (called directly from GPIO ISR — must be ISR-safe)
- * @param user_data User data passed to callback
+ * @brief Set DIO1 interrupt callback (invoked directly from GPIO ISR — must be ISR-safe).
  */
 void lr20xx_hal_set_dio1_callback(struct lr20xx_hal_context *ctx,
 				   lr20xx_dio1_callback_t cb, void *user_data);
