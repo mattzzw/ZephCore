@@ -12,7 +12,7 @@ extern "C" {
 }
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(zephcore_lora, CONFIG_ZEPHCORE_LORA_LOG_LEVEL);
+LOG_MODULE_REGISTER(sx126x_radio, CONFIG_ZEPHCORE_LORA_LOG_LEVEL);
 
 namespace mesh {
 

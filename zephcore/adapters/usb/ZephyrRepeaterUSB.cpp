@@ -85,7 +85,7 @@ static void usbd_msg_callback(struct usbd_context *const ctx, const struct usbd_
 		uint32_t baudrate = 0;
 		int ret = uart_line_ctrl_get(msg->dev, UART_LINE_CTRL_BAUD_RATE, &baudrate);
 		if (ret == 0) {
-			LOG_INF("CDC ACM baud rate: %u", baudrate);
+			LOG_DBG("CDC ACM baud rate: %u", baudrate);
 			if (baudrate == 1200) {
 				enter_bootloader();
 			}
@@ -95,7 +95,7 @@ static void usbd_msg_callback(struct usbd_context *const ctx, const struct usbd_
 		uint32_t baudrate = 0;
 		uart_line_ctrl_get(msg->dev, UART_LINE_CTRL_DTR, &dtr);
 		uart_line_ctrl_get(msg->dev, UART_LINE_CTRL_BAUD_RATE, &baudrate);
-		LOG_INF("CDC ACM DTR=%u baud=%u", dtr, baudrate);
+		LOG_DBG("CDC ACM DTR=%u baud=%u", dtr, baudrate);
 		/* Arduino method: DTR drop (high→low) while baud is 1200 */
 		if (dtr_was_active && !dtr && baudrate == 1200) {
 			enter_bootloader();

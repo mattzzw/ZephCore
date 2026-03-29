@@ -26,7 +26,7 @@
 #include <stdio.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(mc_display, CONFIG_ZEPHCORE_BOARD_LOG_LEVEL);
+LOG_MODULE_REGISTER(zephcore_display, CONFIG_ZEPHCORE_BOARD_LOG_LEVEL);
 
 /* ========== State ========== */
 
@@ -184,7 +184,7 @@ int mc_display_init(void)
 	 * Latin-1 font will typically win. */
 	int num_fonts = cfb_get_numof_fonts(disp_dev);
 
-	LOG_INF("display: %d fonts available", num_fonts);
+	LOG_DBG("display: %d fonts available", num_fonts);
 
 	int best_idx = 0;
 	uint8_t best_h = 255;
@@ -193,7 +193,7 @@ int mc_display_init(void)
 		uint8_t fw = 0, fh = 0;
 
 		cfb_get_font_size(disp_dev, i, &fw, &fh);
-		LOG_INF("  font[%d]: %ux%u", i, fw, fh);
+		LOG_DBG("  font[%d]: %ux%u", i, fw, fh);
 		if (fh < best_h) {
 			best_h = fh;
 			best_idx = i;

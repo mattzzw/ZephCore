@@ -46,7 +46,7 @@ static void multi_tap_emit(struct multi_tap_data *data)
 	if (data->tap_count > 0 && data->tap_count <= cfg->num_tap_codes) {
 		uint16_t code = cfg->tap_codes[data->tap_count - 1];
 
-		LOG_INF("multi-tap: %u tap(s) -> emit code %u", data->tap_count, code);
+		LOG_DBG("multi-tap: %u tap(s) -> emit code %u", data->tap_count, code);
 		input_report_key(dev, code, 1, true, K_FOREVER);
 		input_report_key(dev, code, 0, true, K_FOREVER);
 	}
@@ -96,7 +96,7 @@ static void __maybe_unused multi_tap_cb(struct input_event *evt, void *user_data
 	}
 
 	data->tap_count++;
-	LOG_INF("multi-tap: tap %u/%u", data->tap_count, cfg->num_tap_codes);
+	LOG_DBG("multi-tap: tap %u/%u", data->tap_count, cfg->num_tap_codes);
 
 	if (data->tap_count >= cfg->num_tap_codes) {
 		/* Reached max tap count — emit immediately, no point waiting */

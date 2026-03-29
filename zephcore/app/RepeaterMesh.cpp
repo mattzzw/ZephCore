@@ -39,7 +39,7 @@ static void simple_sort(T* arr, int count, Comparator cmp) {
     }
 }
 
-LOG_MODULE_REGISTER(zephcore_repeater, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(zephcore_repeater, CONFIG_ZEPHCORE_MAIN_LOG_LEVEL);
 
 /* Protocol constants */
 #define FIRMWARE_VER_LEVEL       2
@@ -119,7 +119,7 @@ uint8_t RepeaterMesh::handleLoginReq(const mesh::Identity& sender, const uint8_t
         } else if (strcmp((char*)data, _prefs.guest_password) == 0) {
             perms = PERM_ACL_GUEST;
         } else {
-            LOG_DBG("Invalid password");
+            LOG_WRN("Invalid password");
             return 0;
         }
 

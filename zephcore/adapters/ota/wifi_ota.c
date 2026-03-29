@@ -29,7 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 
-LOG_MODULE_REGISTER(wifi_ota, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(wifi_ota, LOG_LEVEL_DEFAULT);
 
 /* ========== Configuration ========== */
 
@@ -142,7 +142,7 @@ static int home_handler(struct http_client_ctx *client,
 		response_ctx->body_len = strlen(home_html);
 		response_ctx->final_chunk = true;
 		response_ctx->status = HTTP_200_OK;
-		LOG_INF("Served home page (%u bytes)", (unsigned)response_ctx->body_len);
+		LOG_DBG("Served home page (%u bytes)", (unsigned)response_ctx->body_len);
 	}
 	return 0;
 }
@@ -291,10 +291,10 @@ static void wifi_mgmt_event_handler(struct net_mgmt_event_callback *cb,
 {
 	switch (mgmt_event) {
 	case NET_EVENT_WIFI_AP_ENABLE_RESULT:
-		LOG_INF("WiFi AP enable result event received");
+		LOG_DBG("WiFi AP enable result event received");
 		break;
 	case NET_EVENT_WIFI_AP_DISABLE_RESULT:
-		LOG_INF("WiFi AP disable result event");
+		LOG_DBG("WiFi AP disable result event");
 		break;
 	case NET_EVENT_WIFI_AP_STA_CONNECTED:
 		LOG_INF("WiFi client CONNECTED to AP");
@@ -319,7 +319,7 @@ static int wifi_ap_start(void)
 		return -ENODEV;
 	}
 
-	LOG_INF("Network iface: %p, idx=%d", iface, net_if_get_by_iface(iface));
+	LOG_DBG("Network iface: %p, idx=%d", iface, net_if_get_by_iface(iface));
 
 	/* Register WiFi management event callback */
 	net_mgmt_init_event_callback(&wifi_mgmt_cb, wifi_mgmt_event_handler,
@@ -376,8 +376,6 @@ static int wifi_ap_start(void)
 		if (ret) {
 			LOG_ERR("net_if_up failed: %d", ret);
 		}
-	} else {
-		LOG_INF("Interface is up");
 	}
 
 	/* Start DHCP server */

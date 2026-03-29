@@ -136,7 +136,7 @@ uint16_t ZephyrBoard::getBattMilliVolts()
 	}
 	raw /= valid_samples;
 	uint16_t mv = (uint16_t)((VBAT_MV_MULTIPLIER * (int64_t)raw) / 4096);
-	LOG_INF("Battery: raw=%d multiplier=%d mv=%u", (int)raw, VBAT_MV_MULTIPLIER, mv);
+	LOG_DBG("Battery: raw=%d multiplier=%d mv=%u", (int)raw, VBAT_MV_MULTIPLIER, mv);
 	return mv;
 #else
 	return 0;

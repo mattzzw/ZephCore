@@ -38,6 +38,10 @@ module = ZEPHCORE_UI_ACTIONS
 module-str = zephcore_ui_actions
 source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
 
+module = ZEPHCORE_WIFI_OTA
+module-str = zephcore_wifi_ota
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
 menu "ZephCore"
 
 menu "Device Role"

@@ -57,7 +57,7 @@ bool RepeaterDataStore::loadIdentity(mesh::LocalIdentity& id) {
 
     int ret = fs_open(&file, path, FS_O_READ);
     if (ret < 0) {
-        LOG_WRN("No identity file at %s", path);
+        LOG_DBG("No identity file at %s", path);
         return false;
     }
 
@@ -65,7 +65,7 @@ bool RepeaterDataStore::loadIdentity(mesh::LocalIdentity& id) {
     ssize_t n = fs_read(&file, buf, sizeof(buf));
     fs_close(&file);
 
-    LOG_INF("loadIdentity: read %d bytes from %s", (int)n, path);
+    LOG_DBG("loadIdentity: read %d bytes from %s", (int)n, path);
 
     if (n >= PRV_KEY_SIZE) {
         if (id.readFrom(buf, n)) {
@@ -127,7 +127,7 @@ bool RepeaterDataStore::loadPrefs(NodePrefs& prefs) {
 
     struct fs_dirent entry;
     ret = fs_stat(path, &entry);
-    LOG_INF("loadPrefs: file size = %d bytes", ret < 0 ? 0 : (int)entry.size);
+    LOG_DBG("loadPrefs: file size = %d bytes", ret < 0 ? 0 : (int)entry.size);
 
     uint8_t pad[8];
 
@@ -176,7 +176,7 @@ bool RepeaterDataStore::loadPrefs(NodePrefs& prefs) {
     }
 
     LOG_INF("Loaded prefs from %s", path);
-    LOG_INF("  name='%s' freq=%.3f sf=%u bw=%.1f tx_pwr=%d",
+    LOG_DBG("  name='%s' freq=%.3f sf=%u bw=%.1f tx_pwr=%d",
             prefs.node_name, (double)prefs.freq, prefs.sf, (double)prefs.bw, prefs.tx_power_dbm);
 
     /* Validate radio params - use defaults if garbage */

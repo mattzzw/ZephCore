@@ -298,7 +298,7 @@ static void action_page_enter(void)
 #ifdef CONFIG_ZEPHCORE_UI_DISPLAY
 	enum ui_page page = ui_pages_current();
 
-	LOG_INF("ENTER on page %d", page);
+	LOG_DBG("ENTER on page %d", page);
 
 	switch (page) {
 	case UI_PAGE_BLUETOOTH:
@@ -418,7 +418,7 @@ static void action_page_enter(void)
 			if ((now_doom - doom_act_time) <= DOOM_ACT_TIMEOUT_MS) {
 				/* Third press — activate Doom! */
 				doom_act_state = DOOM_ACT_IDLE;
-				LOG_INF("Doom easter egg activated!");
+				LOG_DBG("Doom easter egg activated!");
 				doom_game_start();
 			} else {
 				/* Timeout — restart */
@@ -702,8 +702,6 @@ static void ui_input_cb(struct input_event *evt, void *user_data)
 	if (!evt->value) {
 		return;
 	}
-
-	LOG_INF("UI input: code=%u value=%u", evt->code, evt->value);
 
 #ifdef CONFIG_ZEPHCORE_UI_DISPLAY
 	/* If display is off, wake it and consume the event */

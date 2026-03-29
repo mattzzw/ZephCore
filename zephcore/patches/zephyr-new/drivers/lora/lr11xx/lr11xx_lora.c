@@ -167,7 +167,7 @@ static void lr11xx_hardware_reset(struct lr11xx_data *data,
 {
 	void *ctx = &data->hal_ctx;
 
-	LOG_WRN("LR1110 hardware reset (BUSY stuck recovery)");
+	LOG_INF("LR1110 hardware reset (BUSY stuck recovery)");
 
 	lr11xx_hal_reset(ctx);
 
@@ -210,8 +210,6 @@ static void lr11xx_hardware_reset(struct lr11xx_data *data,
 	data->rx_boost_applied = false;
 
 	lr11xx_hal_enable_dio1_irq(&data->hal_ctx);
-
-	LOG_WRN("LR1110 recovered from hardware reset");
 }
 
 /* ── Apply modem configuration ──────────────────────────────────────── */
@@ -284,8 +282,6 @@ static void lr11xx_start_rx(struct lr11xx_data *data,
 			    const struct lr11xx_config *cfg)
 {
 	void *ctx = &data->hal_ctx;
-
-	LOG_DBG("start_rx: t=%lld", k_uptime_get());
 
 	/* Standby first — wake from any sleep state */
 	data->hal_ctx.radio_is_sleeping = true;
@@ -376,9 +372,6 @@ static void lr11xx_dio1_work_handler(struct k_work *work)
 		goto safety_check;
 	}
 
-	LOG_DBG("DIO1 IRQ: 0x%08x tx=%d t=%lld", irq, data->tx_active,
-		k_uptime_get());
-
 	/* CMD_ERROR (bit 22) is expected — LR1110 firmware sets it on
 	 * several write commands (SetModParams, SetSyncWord, SetRxBoosted,
 	 * SetRx) as a benign side effect on all FW versions (0x0307, 0x0401).
@@ -386,7 +379,7 @@ static void lr11xx_dio1_work_handler(struct k_work *work)
 	 * behavior but never notices because it doesn't read IRQ after writes.
 	 * ERROR (bit 23) indicates an actual hardware fault. */
 	if (irq & LR11XX_SYSTEM_IRQ_ERROR) {
-		LOG_WRN("IRQ hardware ERROR: 0x%08x", irq);
+		LOG_ERR("IRQ hardware ERROR: 0x%08x", irq);
 	}
 
 	/* Any valid IRQ clears the stuck counter */
@@ -450,7 +443,6 @@ static void lr11xx_dio1_work_handler(struct k_work *work)
 	if (irq & LR11XX_SYSTEM_IRQ_CAD_DONE) {
 		bool detected = (irq & LR11XX_SYSTEM_IRQ_CAD_DETECTED) != 0;
 
-		LOG_DBG("CAD done: %s", detected ? "activity" : "free");
 		data->cad_active = false;
 
 		if (data->cad_cb) {
@@ -471,7 +463,6 @@ static void lr11xx_dio1_work_handler(struct k_work *work)
 
 	/* ── TX done ── */
 	if (irq & LR11XX_SYSTEM_IRQ_TX_DONE) {
-		LOG_DBG("TX done");
 		data->tx_active = false;
 
 		/* Full restart — modem was reconfigured for TX */
@@ -486,7 +477,6 @@ static void lr11xx_dio1_work_handler(struct k_work *work)
 
 	/* ── Timeout ── */
 	if (irq & LR11XX_SYSTEM_IRQ_TIMEOUT) {
-		LOG_DBG("Timeout IRQ — restarting RX");
 		if (!data->tx_active) {
 			lr11xx_restart_rx(data);
 			rx_restarted = true;
@@ -497,7 +487,7 @@ static void lr11xx_dio1_work_handler(struct k_work *work)
 	if (irq & LR11XX_SYSTEM_IRQ_CRC_ERROR ||
 	    ((irq & LR11XX_SYSTEM_IRQ_HEADER_ERROR) &&
 	     !(irq & LR11XX_SYSTEM_IRQ_SYNC_WORD_HEADER_VALID))) {
-		LOG_WRN("RX error: CRC=%d HDR=%d",
+		LOG_DBG("RX error: CRC=%d HDR=%d",
 			(irq & LR11XX_SYSTEM_IRQ_CRC_ERROR) ? 1 : 0,
 			(irq & LR11XX_SYSTEM_IRQ_HEADER_ERROR) ? 1 : 0);
 
@@ -532,7 +522,7 @@ safety_check:
 	 * Without this, the radio stays in STDBY_RC (fallback mode) and
 	 * never receives again — permanently deaf. */
 	if (!rx_restarted && data->in_rx_mode && !data->tx_active) {
-		LOG_WRN("DIO1 safety: no IRQ handled (0x%08x rc=%d), "
+		LOG_ERR("DIO1 safety: no IRQ handled (0x%08x rc=%d), "
 			"restarting RX", irq, rc);
 		lr11xx_restart_rx(data);
 	}
@@ -653,7 +643,6 @@ static int lr11xx_lora_send_async(const struct device *dev,
 	if (data->modem_cfg.cad.mode == LORA_CAD_MODE_LBT) {
 		int cad_ret = lr11xx_lora_cad(dev, K_MSEC(200));
 		if (cad_ret > 0) {
-			LOG_DBG("LBT: channel busy");
 			return -EBUSY;
 		}
 		if (cad_ret < 0 && cad_ret != -ENOSYS) {
@@ -709,8 +698,6 @@ static int lr11xx_lora_send_async(const struct device *dev,
 	lr11xx_radio_set_tx(ctx, 5000);
 
 	k_mutex_unlock(&data->spi_mutex);
-
-	LOG_DBG("TX started: len=%u", data_len);
 	return 0;
 }
 
@@ -764,10 +751,6 @@ static int lr11xx_lora_recv_async(const struct device *dev,
 	lr11xx_start_rx(data, cfg);
 
 	k_mutex_unlock(&data->spi_mutex);
-
-	LOG_INF("recv_async started (continuous RX%s)",
-		data->rx_boost_enabled ? ", boosted" : "");
-
 	return 0;
 }
 
@@ -828,7 +811,7 @@ void lr11xx_set_rx_boost(const struct device *dev, bool enable)
 	}
 
 	data->rx_boost_enabled = enable;
-	LOG_INF("RX boost %s", enable ? "enabled" : "disabled");
+	LOG_DBG("RX boost %s", enable ? "enabled" : "disabled");
 
 	if (data->in_rx_mode && data->configured) {
 		/* Radio is fully configured — safe to apply immediately */

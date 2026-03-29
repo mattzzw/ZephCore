@@ -630,7 +630,7 @@ Packet *Mesh::createDatagram(uint8_t type, const Identity &dest, const uint8_t *
 
 	Packet *packet = obtainNewPacket();
 	if (packet == nullptr) {
-		LOG_WRN("createDatagram: packet alloc failed");
+		LOG_ERR("createDatagram: packet alloc failed");
 		return nullptr;
 	}
 

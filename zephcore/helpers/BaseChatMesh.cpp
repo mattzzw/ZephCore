@@ -123,7 +123,7 @@ void BaseChatMesh::populateContactFromAdvert(ContactInfo &ci, const mesh::Identi
 void BaseChatMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, uint32_t timestamp,
 	const uint8_t *app_data, size_t app_data_len)
 {
-	LOG_INF("onAdvertRecv: timestamp=%u app_data_len=%u", timestamp, (unsigned)app_data_len);
+	LOG_DBG("onAdvertRecv: timestamp=%u app_data_len=%u", timestamp, (unsigned)app_data_len);
 
 	AdvertDataParser parser(app_data, app_data_len);
 	if (!(parser.isValid() && parser.hasName())) {
@@ -132,7 +132,7 @@ void BaseChatMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, 
 		return;
 	}
 
-	LOG_INF("onAdvertRecv: valid advert from '%s' type=%d", parser.getName(), parser.getType());
+	LOG_DBG("onAdvertRecv: valid advert from '%s' type=%d", parser.getName(), parser.getType());
 
 	ContactInfo *from = nullptr;
 	for (int i = 0; i < num_contacts; i++) {
@@ -157,9 +157,9 @@ void BaseChatMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, 
 
 	bool is_new = false;
 	if (from == nullptr) {
-		LOG_INF("onAdvertRecv: new contact, checking auto-add for type %d", parser.getType());
+		LOG_DBG("onAdvertRecv: new contact, checking auto-add for type %d", parser.getType());
 		if (!shouldAutoAddContactType(parser.getType())) {
-			LOG_INF("onAdvertRecv: auto-add disabled for type %d, reporting only", parser.getType());
+			LOG_DBG("onAdvertRecv: auto-add disabled for type %d, reporting only", parser.getType());
 			ContactInfo ci;
 			populateContactFromAdvert(ci, id, parser, timestamp);
 			onDiscoveredContact(ci, true, packet->path_len, packet->path);
@@ -190,7 +190,7 @@ void BaseChatMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, 
 		from->sync_since = 0;
 		from->shared_secret_valid = false;
 	} else {
-		LOG_INF("onAdvertRecv: existing contact, updating");
+		LOG_DBG("onAdvertRecv: existing contact, updating");
 	}
 
 	// Update contact
@@ -204,7 +204,7 @@ void BaseChatMesh::onAdvertRecv(mesh::Packet *packet, const mesh::Identity &id, 
 	from->last_advert_timestamp = timestamp;
 	from->lastmod = getRTCClock()->getCurrentTime();
 
-	LOG_INF("onAdvertRecv: calling onDiscoveredContact is_new=%d", is_new);
+	LOG_DBG("onAdvertRecv: calling onDiscoveredContact is_new=%d", is_new);
 	onDiscoveredContact(*from, is_new, packet->path_len, packet->path);
 }
 
@@ -230,7 +230,7 @@ void BaseChatMesh::getPeerSharedSecret(uint8_t *dest_secret, int peer_idx)
 void BaseChatMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender_idx,
 	const uint8_t *secret, uint8_t *data, size_t len)
 {
-	LOG_INF("onPeerDataRecv: type=%d sender_idx=%d len=%u", type, sender_idx, (unsigned)len);
+	LOG_DBG("onPeerDataRecv: type=%d sender_idx=%d len=%u", type, sender_idx, (unsigned)len);
 	int i = matching_peer_indexes[sender_idx];
 	if (i < 0 || i >= num_contacts) {
 		LOG_WRN("onPeerDataRecv: invalid peer index %d (num_contacts=%d)", i, num_contacts);
@@ -238,19 +238,19 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender
 	}
 
 	ContactInfo &from = contacts[i];
-	LOG_INF("onPeerDataRecv: from '%s'", from.name);
+	LOG_DBG("onPeerDataRecv: from '%s'", from.name);
 
 	if (type == PAYLOAD_TYPE_TXT_MSG && len > 5) {
 		uint32_t timestamp;
 		memcpy(&timestamp, data, 4);
 		uint8_t flags = data[4] >> 2;
-		LOG_INF("onPeerDataRecv TXT_MSG: timestamp=%u flags=%d (data[4]=0x%02x) text='%s'",
+		LOG_DBG("onPeerDataRecv TXT_MSG: timestamp=%u flags=%d (data[4]=0x%02x) text='%s'",
 			timestamp, flags, data[4], (const char*)&data[5]);
 
 		data[len] = 0;  // null terminate
 
 		if (flags == TXT_TYPE_PLAIN) {
-			LOG_INF("onPeerDataRecv: flags match TXT_TYPE_PLAIN, calling onMessageRecv");
+			LOG_DBG("onPeerDataRecv: flags match TXT_TYPE_PLAIN, calling onMessageRecv");
 			from.lastmod = getRTCClock()->getCurrentTime();
 			onMessageRecv(from, packet, timestamp, (const char *)&data[5]);
 
@@ -312,7 +312,7 @@ void BaseChatMesh::onPeerDataRecv(mesh::Packet *packet, uint8_t type, int sender
 			}
 		}
 	} else if (type == PAYLOAD_TYPE_RESPONSE && len > 0) {
-		LOG_INF("onPeerDataRecv: RESPONSE received, len=%d, calling onContactResponse", len);
+		LOG_DBG("onPeerDataRecv: RESPONSE received, len=%d, calling onContactResponse", len);
 		onContactResponse(from, data, len);
 		if (packet->isRouteFlood() && from.out_path_len != OUT_PATH_UNKNOWN) {
 			handleReturnPathRetry(from, packet->path, packet->path_len);
@@ -352,11 +352,11 @@ bool BaseChatMesh::onContactPathRecv(ContactInfo &from, uint8_t *in_path, uint8_
 
 void BaseChatMesh::onAckRecv(mesh::Packet *packet, uint32_t ack_crc)
 {
-	LOG_INF("onAckRecv: ack_crc=0x%08x route=%s", ack_crc,
+	LOG_DBG("onAckRecv: ack_crc=0x%08x route=%s", ack_crc,
 		packet->isRouteFlood() ? "flood" : "direct");
 	ContactInfo *from;
 	if ((from = processAck((uint8_t *)&ack_crc)) != nullptr) {
-		LOG_INF("onAckRecv: ACK processed successfully for '%s'", from->name);
+		LOG_DBG("onAckRecv: ACK processed successfully for '%s'", from->name);
 		txt_send_timeout = 0;
 		packet->markDoNotRetransmit();
 
@@ -364,7 +364,7 @@ void BaseChatMesh::onAckRecv(mesh::Packet *packet, uint32_t ack_crc)
 			handleReturnPathRetry(*from, packet->path, packet->path_len);
 		}
 	} else {
-		LOG_INF("onAckRecv: ACK not matched (no pending or wrong crc)");
+		LOG_DBG("onAckRecv: ACK not matched (no pending or wrong crc)");
 	}
 }
 
@@ -448,24 +448,24 @@ int BaseChatMesh::sendMessage(const ContactInfo &recipient, uint32_t timestamp, 
 		return MSG_SEND_FAILED;
 	}
 
-	LOG_INF("sendMessage: packet created, expected_ack=0x%08x raw_len=%d",
+	LOG_DBG("sendMessage: packet created, expected_ack=0x%08x raw_len=%d",
 		expected_ack, pkt->getRawLength());
 
 	uint32_t t = _radio->getEstAirtimeFor(pkt->getRawLength());
 
 	int rc;
 	if (recipient.out_path_len == OUT_PATH_UNKNOWN) {
-		LOG_INF("sendMessage: sending flood");
+		LOG_DBG("sendMessage: sending flood");
 		sendFloodScoped(recipient, pkt);
 		txt_send_timeout = futureMillis(est_timeout = calcFloodTimeoutMillisFor(t));
 		rc = MSG_SEND_SENT_FLOOD;
 	} else {
-		LOG_INF("sendMessage: sending direct path_len=%d", recipient.out_path_len);
+		LOG_DBG("sendMessage: sending direct path_len=%d", recipient.out_path_len);
 		sendDirect(pkt, recipient.out_path, recipient.out_path_len);
 		txt_send_timeout = futureMillis(est_timeout = calcDirectTimeoutMillisFor(t, recipient.out_path_len));
 		rc = MSG_SEND_SENT_DIRECT;
 	}
-	LOG_INF("sendMessage: result=%d est_timeout=%u", rc, est_timeout);
+	LOG_DBG("sendMessage: result=%d est_timeout=%u", rc, est_timeout);
 	return rc;
 }
 

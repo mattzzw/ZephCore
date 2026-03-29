@@ -365,7 +365,7 @@ static bool isChannelMessage(const uint8_t *buf)
 
 void CompanionMesh::queueOfflineMessage(const uint8_t *data, size_t len)
 {
-	LOG_INF("queueOfflineMessage: len=%u type=0x%02x count_before=%d", (unsigned)len, data[0], _offline_queue_count);
+	LOG_DBG("queueOfflineMessage: len=%u type=0x%02x count_before=%d", (unsigned)len, data[0], _offline_queue_count);
 	if (_offline_queue_count >= OFFLINE_QUEUE_SIZE) {
 		// Queue full - try to drop oldest channel message first
 		int pos = _offline_queue_head;
@@ -394,7 +394,7 @@ void CompanionMesh::queueOfflineMessage(const uint8_t *data, size_t len)
 	memcpy(f->buf, data, f->len);
 	_offline_queue_tail = (_offline_queue_tail + 1) % OFFLINE_QUEUE_SIZE;
 	_offline_queue_count++;
-	LOG_INF("queueOfflineMessage: count_after=%d", _offline_queue_count);
+	LOG_DBG("queueOfflineMessage: count_after=%d", _offline_queue_count);
 }
 
 bool CompanionMesh::dequeueOfflineMessage(uint8_t *dest, size_t &len)
@@ -564,11 +564,11 @@ void CompanionMesh::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8
 	if (is_new) {
 		uint8_t rsp[CONTACT_FRAME_SIZE];
 		size_t n = serializeContact(rsp, contact);  /* no header — push code is separate */
-		LOG_INF("onDiscoveredContact: sending PUSH_CODE_NEW_ADVERT (full contact)");
+		LOG_DBG("onDiscoveredContact: sending PUSH_CODE_NEW_ADVERT (full contact)");
 		sendPush(PUSH_CODE_NEW_ADVERT, rsp, n);
 	} else {
 		// ADVERT: send just pubkey
-		LOG_INF("onDiscoveredContact: sending PUSH_CODE_ADVERT (pubkey only)");
+		LOG_DBG("onDiscoveredContact: sending PUSH_CODE_ADVERT (pubkey only)");
 		sendPush(PUSH_CODE_ADVERT, contact.id.pub_key, PUB_KEY_SIZE);
 	}
 }
@@ -659,7 +659,7 @@ void CompanionMesh::queueContactMessage(const ContactInfo &contact, mesh::Packet
 	memcpy(&frame[i], text, text_len);
 	i += text_len;
 
-	LOG_INF("queueContactMessage: frame_len=%d type=0x%02x", i, frame[0]);
+	LOG_DBG("queueContactMessage: frame_len=%d type=0x%02x", i, frame[0]);
 	queueOfflineMessage(frame, i);
 }
 
@@ -744,7 +744,7 @@ void CompanionMesh::onChannelMessageRecv(const mesh::GroupChannel &channel, mesh
 	memcpy(&frame[i], text, text_len);
 	i += text_len;
 
-	LOG_INF("onChannelMessageRecv: frame_len=%d channel_idx=%d", i, channel_idx);
+	LOG_DBG("onChannelMessageRecv: frame_len=%d channel_idx=%d", i, channel_idx);
 	queueOfflineMessage(frame, i);
 	sendPush(PUSH_CODE_MSG_WAITING);
 }
@@ -778,7 +778,7 @@ void CompanionMesh::onChannelDataRecv(const mesh::GroupChannel &channel, mesh::P
 		i += copy_len;
 	}
 
-	LOG_INF("onChannelDataRecv: frame_len=%d channel_idx=%d data_type=%d",
+	LOG_DBG("onChannelDataRecv: frame_len=%d channel_idx=%d data_type=%d",
 		i, channel_idx, (int)data_type);
 	queueOfflineMessage(frame, i);
 	sendPush(PUSH_CODE_MSG_WAITING);
@@ -956,12 +956,12 @@ uint8_t CompanionMesh::onContactRequest(const ContactInfo &contact, uint32_t sen
 
 void CompanionMesh::onContactResponse(const ContactInfo &contact, const uint8_t *data, uint8_t len)
 {
-	LOG_INF("onContactResponse: len=%d from contact", len);
+	LOG_DBG("onContactResponse: len=%d from contact", len);
 	if (len < 4) return;  // Need at least 4-byte tag
 
 	uint32_t tag;
 	memcpy(&tag, data, 4);
-	LOG_INF("onContactResponse: tag=%08x, _pending_login=%08x", tag, _pending_login);
+	LOG_DBG("onContactResponse: tag=%08x, _pending_login=%08x", tag, _pending_login);
 
 	// Check for login response
 	if (_pending_login && memcmp(&_pending_login, contact.id.pub_key, 4) == 0) {
@@ -1085,7 +1085,7 @@ void CompanionMesh::logRxRaw(float snr, float rssi, const uint8_t raw[], int len
 void CompanionMesh::onTraceRecv(mesh::Packet *packet, uint32_t tag, uint32_t auth_code, uint8_t flags,
 	const uint8_t *path_snrs, const uint8_t *path_hashes, uint8_t path_len)
 {
-	LOG_INF("onTraceRecv: tag=0x%08x auth=0x%08x flags=0x%02x path_len=%d",
+	LOG_DBG("onTraceRecv: tag=0x%08x auth=0x%08x flags=0x%02x path_len=%d",
 		tag, auth_code, flags, path_len);
 
 	// path_sz is encoded in flags bits 0-1 (0=1, 1=2, 2=4, 3=8 byte hash)
@@ -1112,7 +1112,7 @@ void CompanionMesh::onTraceRecv(mesh::Packet *packet, uint32_t tag, uint32_t aut
 /* Control data response - for repeater discovery, etc */
 void CompanionMesh::onControlDataRecv(mesh::Packet *packet)
 {
-	LOG_INF("onControlDataRecv: payload_len=%d path_len=%d", packet->payload_len, packet->path_len);
+	LOG_DBG("onControlDataRecv: payload_len=%d path_len=%d", packet->payload_len, packet->path_len);
 
 	// Buffer: [PUSH_CODE_CONTROL_DATA][snr*4][rssi][path_len][payload...]
 	if (packet->payload_len + 4 > MAX_FRAME_SIZE) {
@@ -1135,7 +1135,7 @@ void CompanionMesh::onControlDataRecv(mesh::Packet *packet)
 /* Raw data response - for custom packet types */
 void CompanionMesh::onRawDataRecv(mesh::Packet *packet)
 {
-	LOG_INF("onRawDataRecv: payload_len=%d", packet->payload_len);
+	LOG_DBG("onRawDataRecv: payload_len=%d", packet->payload_len);
 
 	// Buffer: [PUSH_CODE_RAW_DATA][snr*4][rssi][reserved][payload...]
 	if (packet->payload_len + 4 > MAX_FRAME_SIZE) {
@@ -1636,7 +1636,7 @@ bool CompanionMesh::handleProtocolFrame(const uint8_t *data, size_t len)
 	case CMD_SEND_TXT_MSG:
 		// Frame format: cmd(1) + txt_type(1) + attempt(1) + timestamp(4) + pub_key_prefix(6) + text(N)
 		// Minimum: 1 + 1 + 1 + 4 + 6 + 1 = 14 bytes
-		LOG_INF("CMD_SEND_TXT_MSG: len=%u (min=14)", (unsigned)len);
+		LOG_DBG("CMD_SEND_TXT_MSG: len=%u (min=14)", (unsigned)len);
 		if (len >= 14) {
 			int i = 1;
 			uint8_t txt_type = data[i++];
@@ -1652,13 +1652,13 @@ bool CompanionMesh::handleProtocolFrame(const uint8_t *data, size_t len)
 			text_buf[text_len] = '\0';
 			const char *text = text_buf;
 
-			LOG_INF("CMD_SEND_TXT_MSG: txt_type=%d attempt=%d pubkey=%02x%02x%02x%02x%02x%02x",
+			LOG_DBG("CMD_SEND_TXT_MSG: txt_type=%d attempt=%d pubkey=%02x%02x%02x%02x%02x%02x",
 				txt_type, attempt, pub_key_prefix[0], pub_key_prefix[1], pub_key_prefix[2],
 				pub_key_prefix[3], pub_key_prefix[4], pub_key_prefix[5]);
 
 			ContactInfo *contact = lookupContactByPubKey(pub_key_prefix, 6);
 			if (contact && (txt_type == TXT_TYPE_PLAIN || txt_type == TXT_TYPE_CLI_DATA)) {
-				LOG_INF("CMD_SEND_TXT_MSG: contact='%s' text='%s' text_len=%u", contact->name, text, (unsigned)text_len);
+				LOG_DBG("CMD_SEND_TXT_MSG: contact='%s' text='%s' text_len=%u", contact->name, text, (unsigned)text_len);
 
 				uint32_t expected_ack = 0, est_timeout;
 				int result;
@@ -1671,7 +1671,7 @@ bool CompanionMesh::handleProtocolFrame(const uint8_t *data, size_t len)
 					result = sendMessage(*contact, msg_timestamp, attempt, text, expected_ack, est_timeout);
 				}
 
-				LOG_INF("CMD_SEND_TXT_MSG: sendMessage result=%d expected_ack=0x%08x", result, expected_ack);
+				LOG_DBG("CMD_SEND_TXT_MSG: sendMessage result=%d expected_ack=0x%08x", result, expected_ack);
 
 				if (result != MSG_SEND_FAILED) {
 					if (expected_ack) {
@@ -1759,7 +1759,7 @@ bool CompanionMesh::handleProtocolFrame(const uint8_t *data, size_t len)
 	}
 
 	case CMD_SYNC_NEXT_MESSAGE: {
-		LOG_INF("CMD_SYNC_NEXT_MESSAGE: queue_count=%d pending=%d",
+		LOG_DBG("CMD_SYNC_NEXT_MESSAGE: queue_count=%d pending=%d",
 			_offline_queue_count, _sync_pending);
 
 		/* Phone asking for next = implicit ACK for the previously-peeked message */
@@ -1771,11 +1771,11 @@ bool CompanionMesh::handleProtocolFrame(const uint8_t *data, size_t len)
 		uint8_t buf[MAX_FRAME_SIZE];
 		size_t msg_len;
 		if (peekOfflineMessage(buf, msg_len)) {
-			LOG_INF("CMD_SYNC_NEXT_MESSAGE: peeked msg_len=%u type=0x%02x", (unsigned)msg_len, buf[0]);
+			LOG_DBG("CMD_SYNC_NEXT_MESSAGE: peeked msg_len=%u type=0x%02x", (unsigned)msg_len, buf[0]);
 			writeFrame(buf, msg_len);
 			_sync_pending = true;  /* will be confirmed on next request or lost on disconnect */
 		} else {
-			LOG_INF("CMD_SYNC_NEXT_MESSAGE: queue empty, sending NO_MORE_MSGS");
+			LOG_DBG("CMD_SYNC_NEXT_MESSAGE: queue empty, sending NO_MORE_MSGS");
 			uint8_t rsp[] = { PACKET_NO_MORE_MSGS };
 			writeFrame(rsp, sizeof(rsp));
 
@@ -1886,7 +1886,7 @@ bool CompanionMesh::handleProtocolFrame(const uint8_t *data, size_t len)
 			 * GPS time is more accurate than phone time. Still return OK
 			 * so the app doesn't keep retrying. */
 			if (gps_has_time_sync()) {
-				LOG_INF("Ignoring phone time sync - GPS time sync active");
+				LOG_DBG("Ignoring phone time sync - GPS time sync active");
 				sendPacketOk();
 				return true;
 			}
@@ -2182,13 +2182,13 @@ bool CompanionMesh::handleProtocolFrame(const uint8_t *data, size_t len)
 			const char *password = pw_buf;
 			if (contact) {
 				uint32_t est_timeout;
-				LOG_INF("CMD_SEND_LOGIN: sending to contact, path_len=%d", contact->out_path_len);
+				LOG_DBG("CMD_SEND_LOGIN: sending to contact, path_len=%d", contact->out_path_len);
 				int result = sendLogin(*contact, password, est_timeout);
-				LOG_INF("CMD_SEND_LOGIN: sendLogin returned %d, est_timeout=%u", result, est_timeout);
+				LOG_DBG("CMD_SEND_LOGIN: sendLogin returned %d, est_timeout=%u", result, est_timeout);
 				if (result != MSG_SEND_FAILED) {
 					clearPendingReqs();
 					memcpy(&_pending_login, contact->id.pub_key, 4);  // match in onContactResponse()
-					LOG_INF("CMD_SEND_LOGIN: _pending_login set to %08x", _pending_login);
+					LOG_DBG("CMD_SEND_LOGIN: _pending_login set to %08x", _pending_login);
 					uint8_t rsp[10];
 					rsp[0] = PACKET_SENT;
 					rsp[1] = (result == MSG_SEND_SENT_FLOOD) ? 1 : 0;

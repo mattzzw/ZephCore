@@ -207,7 +207,7 @@ void Dispatcher::checkRecv()
 
 		Packet *pkt = _mgr->allocNew();
 		if (pkt == nullptr) {
-			LOG_WRN("checkRecv: packet alloc failed");
+			LOG_ERR("checkRecv: packet alloc failed");
 			break;
 		}
 
@@ -301,7 +301,7 @@ void Dispatcher::checkSend()
 		}
 		if (now - cad_busy_start > getCADFailMaxDuration()) {
 			_err_flags |= ERR_EVENT_CAD_TIMEOUT;
-			LOG_WRN("checkSend: CAD timeout exceeded");
+			LOG_ERR("checkSend: CAD timeout exceeded");
 		} else {
 			uint32_t retry = getCADFailRetryDelay();
 			next_tx_time = futureMillis((int)retry);
@@ -338,7 +338,7 @@ void Dispatcher::checkSend()
 		len += Packet::writePath(&raw[len], outbound->path, outbound->path_len);
 
 		if (len + outbound->payload_len > MAX_TRANS_UNIT) {
-			LOG_WRN("checkSend: packet too large len=%d+%d > %d", len, outbound->payload_len, MAX_TRANS_UNIT);
+			LOG_ERR("checkSend: packet too large len=%d+%d > %d", len, outbound->payload_len, MAX_TRANS_UNIT);
 			_mgr->free(outbound);
 			outbound = nullptr;
 		} else {
@@ -416,7 +416,7 @@ void Dispatcher::releasePacket(Packet *packet)
 void Dispatcher::sendPacket(Packet *packet, uint8_t priority, uint32_t delay_millis)
 {
 	if (!Packet::isValidPathLen(packet->path_len) || packet->payload_len > MAX_PACKET_PAYLOAD) {
-		LOG_WRN("sendPacket: rejected - path_len=%d or payload_len=%d invalid",
+		LOG_ERR("sendPacket: rejected - path_len=%d or payload_len=%d invalid",
 			packet->path_len, packet->payload_len);
 		_mgr->free(packet);
 	} else {

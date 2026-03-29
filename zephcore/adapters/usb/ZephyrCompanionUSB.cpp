@@ -222,7 +222,7 @@ size_t zephcore_usb_companion_write_frame(const uint8_t *src, size_t len)
 		uart_poll_out(usb_dev, src[i]);
 	}
 
-	LOG_INF("usb_write_frame: sent len=%u hdr=0x%02x", (unsigned)len, src[0]);
+	LOG_DBG("usb_write_frame: sent len=%u hdr=0x%02x", (unsigned)len, src[0]);
 	return len;
 }
 

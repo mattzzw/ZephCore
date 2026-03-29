@@ -57,7 +57,7 @@ bool ZephyrDataStore::mount()
 		LOG_INF("External QSPI LittleFS at %s (automounted, 100 blobs)", extMountPoint());
 	} else {
 		ext_lfs_mounted = false;
-		LOG_WRN("External QSPI NOT mounted at %s - using internal only (20 blobs)", extMountPoint());
+		LOG_INF("External QSPI NOT mounted at %s - using internal only (20 blobs)", extMountPoint());
 	}
 
 	return true;
@@ -335,23 +335,22 @@ bool ZephyrDataStore::saveMainIdentity(const mesh::LocalIdentity &identity)
 void ZephyrDataStore::loadPrefs(NodePrefs &prefs)
 {
 	bool prefs_exists = exists(PREFS_FILE);
-	LOG_INF("loadPrefs: exists(%s)=%d", PREFS_FILE, prefs_exists ? 1 : 0);
 	if (!prefs_exists) {
-		LOG_WRN("loadPrefs: no prefs file found");
+		LOG_DBG("loadPrefs: no prefs file found");
 		return;
 	}
 
 	uint8_t buf[256];
 	size_t len = 0;
 	if (!openRead(PREFS_FILE, buf, sizeof(buf), len)) {
-		LOG_WRN("loadPrefs: read failed");
+		LOG_ERR("loadPrefs: read failed");
 		return;
 	}
 	if (len < 88) {
-		LOG_WRN("loadPrefs: file too small (%d bytes, need 88)", (int)len);
+		LOG_ERR("loadPrefs: file too small (%d bytes, need 88)", (int)len);
 		return;
 	}
-	LOG_INF("loadPrefs: loaded %d bytes from %s", (int)len, PREFS_FILE);
+	LOG_DBG("loadPrefs: loaded %d bytes from %s", (int)len, PREFS_FILE);
 
 	size_t off = 0;
 	memcpy(&prefs.airtime_factor, &buf[off], sizeof(float));
@@ -482,7 +481,7 @@ void ZephyrDataStore::savePrefs(const NodePrefs &prefs)
 	/* Total: 96 bytes (Arduino reads 92, ZephCore reads 96) */
 
 	bool ok = openWrite(PREFS_FILE, buf, off);
-	LOG_INF("savePrefs: wrote %s, ok=%d (%d bytes), name='%.16s'",
+	LOG_DBG("savePrefs: wrote %s, ok=%d (%d bytes), name='%.16s'",
 		PREFS_FILE, ok ? 1 : 0, (int)off, prefs.node_name);
 }
 
@@ -534,13 +533,12 @@ static void record_to_contact(const uint8_t rec[CONTACT_DATA_SZ], ContactInfo &c
 void ZephyrDataStore::loadContacts(DataStoreHost *host)
 {
 	const char *path = contactsFile();
-	LOG_INF("loadContacts: path=%s", path);
 
 	struct fs_file_t file;
 	fs_file_t_init(&file);
 	int rc = fs_open(&file, path, FS_O_READ);
 	if (rc < 0) {
-		LOG_WRN("loadContacts: no contacts file found");
+		LOG_DBG("loadContacts: no contacts file found");
 		return;
 	}
 
@@ -569,7 +567,6 @@ void ZephyrDataStore::loadContacts(DataStoreHost *host)
 void ZephyrDataStore::saveContacts(DataStoreHost *host)
 {
 	const char *path = contactsFile();
-	LOG_INF("saveContacts: path=%s", path);
 
 	if (exists(path)) {
 		fs_unlink(path);
@@ -635,7 +632,6 @@ void ZephyrDataStore::loadChannels(DataStoreHost *host)
 void ZephyrDataStore::saveChannels(DataStoreHost *host)
 {
 	const char *path = channelsFile();
-	LOG_INF("saveChannels: path=%s", path);
 
 	if (exists(path)) {
 		fs_unlink(path);

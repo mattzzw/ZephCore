@@ -325,7 +325,6 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	/* Clear interface state if BLE was active */
 	if (active_iface == ZEPHCORE_IFACE_BLE) {
 		active_iface = ZEPHCORE_IFACE_NONE;
-		LOG_INF("active_iface = IFACE_NONE");
 	}
 
 	/* Clear queues, retry state, and congestion */
@@ -534,7 +533,6 @@ static void pairing_complete(struct bt_conn *conn, bool bonded)
 		/* Main handles USB state clearing via on_connected callback */
 	}
 	active_iface = ZEPHCORE_IFACE_BLE;
-	LOG_INF("active_iface = IFACE_BLE");
 }
 
 static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
@@ -568,7 +566,7 @@ static void overflow_retry_work_fn(struct k_work *work)
 
 	if (k_msgq_put(&ble_send_queue, &overflow_frame, K_NO_WAIT) == 0) {
 		overflow_pending = false;
-		LOG_INF("overflow frame queued hdr=0x%02x, kicking drain",
+		LOG_DBG("overflow frame queued hdr=0x%02x, kicking drain",
 			overflow_frame.buf[0]);
 		kick_tx_drain();
 		/* Congestion flag cleared by tx_drain at low water mark */
@@ -642,13 +640,13 @@ static void tx_drain_work_fn(struct k_work *work)
 
 	/* Check retry buffer first */
 	if (tx_retry_pending) {
-		LOG_INF("tx_drain[BLE]: retrying len=%u hdr=0x%02x", (unsigned)tx_retry_frame.len, tx_retry_frame.buf[0]);
+		LOG_DBG("tx_drain[BLE]: retrying len=%u hdr=0x%02x", (unsigned)tx_retry_frame.len, tx_retry_frame.buf[0]);
 		ble_tx_in_progress = true;
 		ble_tx_start_time = k_uptime_get();
 		err = secure_nus_send(conn, tx_retry_frame.buf, tx_retry_frame.len);
 		if (err == 0) {
 			tx_retry_pending = false;
-			LOG_INF("tx_drain[BLE]: retry success");
+			LOG_DBG("tx_drain[BLE]: retry success");
 			bt_conn_unref(conn);
 			return;  /* Callback will chain to next */
 		} else if (err == -EAGAIN || err == -ENOMEM) {
@@ -700,7 +698,6 @@ static void tx_drain_work_fn(struct k_work *work)
 
 	if (err == 0) {
 		/* Success - callback will chain to next */
-		LOG_DBG("tx_drain[BLE]: queued for TX");
 		bt_conn_unref(conn);
 		return;
 	} else if (err == -EAGAIN || err == -ENOMEM) {
@@ -753,7 +750,7 @@ static ssize_t secure_nus_rx_write(struct bt_conn *conn, const struct bt_gatt_at
 	const uint8_t *data = (const uint8_t *)buf;
 	uint8_t cmd = data[0];
 
-	LOG_INF("NUS RX: len=%u cmd=0x%02x", len, cmd);
+	LOG_DBG("NUS RX: len=%u cmd=0x%02x", len, cmd);
 
 	/* Notify main via callback */
 	if (ble_cbs && ble_cbs->on_rx_frame) {

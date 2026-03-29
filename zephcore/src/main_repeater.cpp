@@ -12,7 +12,7 @@
 #include <zephyr/sys/util.h>
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(zephcore_repeater_main, CONFIG_ZEPHCORE_LORA_LOG_LEVEL);
+LOG_MODULE_REGISTER(zephcore_repeater_main, CONFIG_ZEPHCORE_MAIN_LOG_LEVEL);
 
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
