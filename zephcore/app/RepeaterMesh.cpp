@@ -10,6 +10,7 @@
 #include <adapters/radio/LoRaRadioBase.h>
 #include <adapters/sensors/SimpleLPP.h>
 #include <adapters/sensors/ZephyrEnvSensors.h>
+#include <adapters/gps/ZephyrGPSManager.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
@@ -284,7 +285,14 @@ int RepeaterMesh::handleRequest(ClientInfo* sender, uint32_t sender_timestamp, u
             }
         }
 
-        /* TODO: Add GPS location here via sensor manager */
+        /* GPS precise position — only shared via telemetry, not adverts */
+        struct gps_position gpos;
+        if (gps_get_last_known_position(&gpos)) {
+            lpp.addGPS(CH_SELF,
+                (float)(gpos.latitude_ndeg / 1e9),
+                (float)(gpos.longitude_ndeg / 1e9),
+                gpos.altitude_mm / 1000.0f);
+        }
 
         return 4 + lpp.getSize();
     }
@@ -829,6 +837,22 @@ void RepeaterMesh::begin(RepeaterDataStore* store) {
 
     LOG_INF("RepeaterMesh started: %s (freq=%.2f bw=%.0f sf=%d cr=%d)",
             _prefs.node_name, (double)_prefs.freq, (double)_prefs.bw, _prefs.sf, _prefs.cr);
+}
+
+double RepeaterMesh::getNodeLat() const {
+    struct gps_position pos;
+    if (gps_get_last_known_position(&pos)) {
+        return pos.latitude_ndeg / 1e9;
+    }
+    return _prefs.node_lat;
+}
+
+double RepeaterMesh::getNodeLon() const {
+    struct gps_position pos;
+    if (gps_get_last_known_position(&pos)) {
+        return pos.longitude_ndeg / 1e9;
+    }
+    return _prefs.node_lon;
 }
 
 void RepeaterMesh::savePrefs() {

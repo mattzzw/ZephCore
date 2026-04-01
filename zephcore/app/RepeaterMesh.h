@@ -161,8 +161,8 @@ public:
     const char* getFirmwareVer() override { return FIRMWARE_VERSION; }
     const char* getBuildDate() override { return FIRMWARE_BUILD_DATE; }
     const char* getRole() override { return FIRMWARE_ROLE; }
-    double getNodeLat() const override { return _prefs.node_lat; }
-    double getNodeLon() const override { return _prefs.node_lon; }
+    double getNodeLat() const override;
+    double getNodeLon() const override;
     const char* getNodeName() { return _prefs.node_name; }
     NodePrefs* getNodePrefs() { return &_prefs; }
 

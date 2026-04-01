@@ -252,7 +252,10 @@ static void gps_event_callback(void)
 
 static RepeaterDataStore data_store;
 
-/* GPS fix callback - syncs RTC from GPS time and updates node position */
+/* GPS fix callback - syncs RTC from GPS time.
+ * Repeaters do NOT update prefs lat/lon from GPS — prefs coordinates are the
+ * user's manually-set position used for adverts.  Precise GPS position is
+ * served only via telemetry requests (gps_get_last_known_position). */
 static void gps_fix_callback(double lat, double lon, int64_t utc_time)
 {
 	if (utc_time > 0) {
@@ -260,23 +263,14 @@ static void gps_fix_callback(double lat, double lon, int64_t utc_time)
 		rtc_clock.setCurrentTime((uint32_t)utc_time);
 	}
 
-#ifdef ZEPHCORE_LORA
-	/* Update node position for mesh advertising */
-	NodePrefs *prefs = repeater_mesh_ptr ? repeater_mesh_ptr->getNodePrefs() : nullptr;
-	if (prefs && (lat != prefs->node_lat || lon != prefs->node_lon)) {
-		prefs->node_lat = lat;
-		prefs->node_lon = lon;
-		int lat_deg = (int)lat;
-		int lon_deg = (int)lon;
-		int lat_frac = (int)((lat - lat_deg) * 1000000);
-		int lon_frac = (int)((lon - lon_deg) * 1000000);
-		if (lat_frac < 0) lat_frac = -lat_frac;
-		if (lon_frac < 0) lon_frac = -lon_frac;
-		LOG_INF("GPS fix: position updated lat=%d.%06d lon=%d.%06d",
-			lat_deg, lat_frac, lon_deg, lon_frac);
-		data_store.savePrefs(*prefs);
-	}
-#endif
+	int lat_deg = (int)lat;
+	int lon_deg = (int)lon;
+	int lat_frac = (int)((lat - lat_deg) * 1000000);
+	int lon_frac = (int)((lon - lon_deg) * 1000000);
+	if (lat_frac < 0) lat_frac = -lat_frac;
+	if (lon_frac < 0) lon_frac = -lon_frac;
+	LOG_INF("GPS fix: lat=%d.%06d lon=%d.%06d (telemetry only)",
+		lat_deg, lat_frac, lon_deg, lon_frac);
 }
 
 #ifdef ZEPHCORE_LORA
