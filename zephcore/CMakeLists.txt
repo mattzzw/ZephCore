@@ -411,6 +411,22 @@ if(CONFIG_ZEPHCORE_ROLE_REPEATER)
     ${CMAKE_CURRENT_SOURCE_DIR}/adapters/usb
   )
   target_compile_definitions(app PRIVATE ZEPHCORE_REPEATER=1)
+elseif(CONFIG_ZEPHCORE_ROLE_OBSERVER)
+  message(STATUS "ZephCore Role: OBSERVER")
+  target_sources(app PRIVATE
+    app/main_observer.cpp
+    app/ObserverMesh.cpp
+    app/RepeaterDataStore.cpp
+    adapters/wifi/ZephyrWiFiStation.c
+    adapters/mqtt/ZephyrMQTTPublisher.c
+  )
+  target_include_directories(app PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/adapters/wifi
+    ${CMAKE_CURRENT_SOURCE_DIR}/adapters/mqtt
+    ${CMAKE_CURRENT_SOURCE_DIR}/adapters/usb
+    ${CMAKE_CURRENT_SOURCE_DIR}/app
+  )
+  target_compile_definitions(app PRIVATE ZEPHCORE_OBSERVER=1)
 else()
   message(STATUS "ZephCore Role: COMPANION")
   target_sources(app PRIVATE
@@ -462,8 +478,8 @@ if(CONFIG_ZEPHCORE_UI_BUTTONS OR CONFIG_ZEPHCORE_UI_BUZZER OR CONFIG_ZEPHCORE_UI
   target_include_directories(app PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/helpers/ui
   )
-  # Repeater builds need weak stubs for companion-only UI mesh actions
-  if(CONFIG_ZEPHCORE_ROLE_REPEATER)
+  # Repeater and Observer builds need weak stubs for companion-only UI mesh actions
+  if(CONFIG_ZEPHCORE_ROLE_REPEATER OR CONFIG_ZEPHCORE_ROLE_OBSERVER)
     target_sources(app PRIVATE
       helpers/ui/ui_mesh_actions_stubs.c
     )

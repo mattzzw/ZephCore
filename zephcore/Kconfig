@@ -42,6 +42,10 @@ module = ZEPHCORE_WIFI_OTA
 module-str = zephcore_wifi_ota
 source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
 
+module = ZEPHCORE_OBSERVER
+module-str = zephcore_observer
+source "$(ZEPHYR_BASE)/subsys/logging/Kconfig.template.log_config"
+
 menu "ZephCore"
 
 menu "Device Role"
@@ -65,6 +69,16 @@ config ZEPHCORE_ROLE_REPEATER
 	  LoRa mesh repeater with USB serial CLI interface.
 	  No BLE stack. Has ACL authentication, region filtering,
 	  neighbor tracking, and full CLI command set.
+
+config ZEPHCORE_ROLE_OBSERVER
+	bool "Observer (listen-only, WiFi+MQTT)"
+	help
+	  ESP32-only listen-only node. Receives LoRa packets without
+	  forwarding. Connects to WiFi (STA mode) and publishes received
+	  packets to an MQTT broker in meshcoretomqtt-compatible format.
+	  All parameters (WiFi SSID/PSK, MQTT host/port/TLS/user/pass,
+	  IATA location code) are configured at runtime via serial CLI
+	  and stored in LittleFS. No BLE, no advertising, no routing.
 
 endchoice
 
