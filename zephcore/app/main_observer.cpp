@@ -379,6 +379,14 @@ int main(void)
 			     observer_mesh.getStatusTopic(),
 			     observer_mesh.getPacketsTopic());
 
+	/* Publish self-advert once on each MQTT connect so CoreScope can pin
+	 * this observer on the map (requires lat/lon to be configured). */
+	mqtt_publisher_set_connect_cb([]() {
+		if (s_mesh_ptr) {
+			s_mesh_ptr->publishSelfAdvert();
+		}
+	});
+
 	LOG_INF("Observer event loop running");
 
 	/* ========== Event loop ========== */

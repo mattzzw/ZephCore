@@ -50,6 +50,7 @@ static char s_status_topic[PUB_TOPIC_MAX];
 static char s_packets_topic[PUB_TOPIC_MAX];
 
 static volatile bool s_connected;
+static void (*s_connect_cb)(void);
 
 /* Event bit to trigger reconnect from external callers */
 #define PUB_RECONNECT_BIT BIT(0)
@@ -73,6 +74,9 @@ static void mqtt_evt_handler(struct mqtt_client *client,
 		if (evt->result == 0) {
 			LOG_INF("MQTT connected");
 			s_connected = true;
+			if (s_connect_cb) {
+				s_connect_cb();
+			}
 		} else {
 			/* Broker return codes: 1=bad proto, 2=id rejected, 3=server unavail,
 			 * 4=bad user/pass, 5=not authorized */
@@ -466,4 +470,9 @@ bool mqtt_publisher_is_connected(void)
 void mqtt_publisher_reconnect(void)
 {
 	k_event_post(&s_pub_events, PUB_RECONNECT_BIT);
+}
+
+void mqtt_publisher_set_connect_cb(void (*cb)(void))
+{
+	s_connect_cb = cb;
 }

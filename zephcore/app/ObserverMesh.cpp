@@ -285,6 +285,20 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 			snprintf(reply, reply_size, "%u",
 				 (_creds) ? (unsigned)_creds->mqtt_tls : 1u);
 
+		} else if (strcmp(key, "lat") == 0) {
+			if (_creds && _creds->lat_e6 != 0) {
+				snprintf(reply, reply_size, "%.6f", (double)_creds->lat_e6 / 1e6);
+			} else {
+				snprintf(reply, reply_size, "(not set)");
+			}
+
+		} else if (strcmp(key, "lon") == 0) {
+			if (_creds && _creds->lon_e6 != 0) {
+				snprintf(reply, reply_size, "%.6f", (double)_creds->lon_e6 / 1e6);
+			} else {
+				snprintf(reply, reply_size, "(not set)");
+			}
+
 		} else {
 			snprintf(reply, reply_size, "ERR unknown key: %s", key);
 		}
@@ -434,6 +448,26 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 			snprintf(reply, reply_size, "mqtt.iata=%s (topics updated, reconnecting)", _creds->mqtt_iata);
 			mqtt_publisher_reconnect();
 
+		} else if ((val = find_val(rest, "lat")) != nullptr) {
+			double lat_d = atof(val);
+			if (lat_d < -90.0 || lat_d > 90.0) {
+				snprintf(reply, reply_size, "ERR lat must be -90..90");
+			} else {
+				_creds->lat_e6 = (int32_t)(lat_d * 1e6);
+				observer_creds_save(_creds, _store->getBasePath());
+				snprintf(reply, reply_size, "lat=%.6f", lat_d);
+			}
+
+		} else if ((val = find_val(rest, "lon")) != nullptr) {
+			double lon_d = atof(val);
+			if (lon_d < -180.0 || lon_d > 180.0) {
+				snprintf(reply, reply_size, "ERR lon must be -180..180");
+			} else {
+				_creds->lon_e6 = (int32_t)(lon_d * 1e6);
+				observer_creds_save(_creds, _store->getBasePath());
+				snprintf(reply, reply_size, "lon=%.6f", lon_d);
+			}
+
 		} else {
 			snprintf(reply, reply_size, "ERR unknown key");
 		}
@@ -442,6 +476,153 @@ bool ObserverMesh::handleCLI(const char *command, char *reply, int reply_size)
 
 	snprintf(reply, reply_size, "ERR unknown command (type 'help')");
 	return false;
+}
+
+/* ========== Self-advert ========== */
+
+void ObserverMesh::publishSelfAdvert()
+{
+	if (!_creds || (_creds->lat_e6 == 0 && _creds->lon_e6 == 0)) {
+		LOG_DBG("publishSelfAdvert: lat/lon not configured, skipping");
+		return;
+	}
+	/* Skip if the node name is still the auto-generated default ("Observer-XXXXXXXX").
+	 * The user must have set a meaningful name before advertising. */
+	if (strncmp(_prefs.node_name, "Observer-", 9) == 0) {
+		LOG_DBG("publishSelfAdvert: name is default, skipping");
+		return;
+	}
+
+	/* ---- Build raw wire frame (zero-hop advert) ----
+	 *
+	 * Byte 0:    header = ROUTE_TYPE_DIRECT | (PAYLOAD_TYPE_ADVERT << PH_TYPE_SHIFT)
+	 * Byte 1:    path_len_byte = 0  (zero hops)
+	 * Bytes 2..33:  pubkey (32)
+	 * Bytes 34..37: timestamp (uint32 LE)
+	 * Bytes 38..101: signature (64) — signed over pubkey + ts + appdata
+	 * Byte 102:  flags = Type:Chat(1) | HasLocation(0x10) | HasName(0x80)
+	 * Bytes 103..106: lat_e6 (int32 LE)
+	 * Bytes 107..110: lon_e6 (int32 LE)
+	 * Bytes 111..: node name (null-terminated)
+	 */
+
+	uint8_t raw[192];
+	int pos = 0;
+
+	/* Header and zero-hop path */
+	raw[pos++] = (uint8_t)((PAYLOAD_TYPE_ADVERT << PH_TYPE_SHIFT) | ROUTE_TYPE_DIRECT);
+	raw[pos++] = 0x00;  /* path_len_byte = 0 → zero hop */
+
+	/* Payload: pubkey */
+	int pubkey_off = pos;
+	memcpy(&raw[pos], _self_id.pub_key, PUB_KEY_SIZE); pos += PUB_KEY_SIZE;
+
+	/* Payload: timestamp */
+	int ts_off = pos;
+	uint32_t now_ts = _rtc ? (uint32_t)_rtc->getCurrentTime() : 0;
+	raw[pos++] = (uint8_t)(now_ts);
+	raw[pos++] = (uint8_t)(now_ts >>  8);
+	raw[pos++] = (uint8_t)(now_ts >> 16);
+	raw[pos++] = (uint8_t)(now_ts >> 24);
+
+	/* Payload: signature placeholder (64 bytes, filled below) */
+	int sig_off = pos;
+	memset(&raw[pos], 0, SIGNATURE_SIZE); pos += SIGNATURE_SIZE;
+
+	/* AppData: flags | lat | lon | name */
+	int appdata_off = pos;
+	raw[pos++] = 0x01 | 0x10 | 0x80;  /* Type=Chat, HasLocation, HasName */
+
+	int32_t lat = _creds->lat_e6;
+	raw[pos++] = (uint8_t)(lat);
+	raw[pos++] = (uint8_t)(lat >>  8);
+	raw[pos++] = (uint8_t)(lat >> 16);
+	raw[pos++] = (uint8_t)(lat >> 24);
+
+	int32_t lon = _creds->lon_e6;
+	raw[pos++] = (uint8_t)(lon);
+	raw[pos++] = (uint8_t)(lon >>  8);
+	raw[pos++] = (uint8_t)(lon >> 16);
+	raw[pos++] = (uint8_t)(lon >> 24);
+
+	const char *name = _prefs.node_name;
+	size_t name_len = strlen(name);
+	if (name_len >= sizeof(raw) - pos - 1) {
+		name_len = sizeof(raw) - pos - 2;
+	}
+	memcpy(&raw[pos], name, name_len);
+	pos += name_len;
+	raw[pos++] = '\0';
+
+	int raw_len = pos;
+
+	/* Sign: pubkey + timestamp + appdata */
+	int sign_input_len = PUB_KEY_SIZE + 4 + (appdata_off - ts_off - 4) + (raw_len - appdata_off);
+	sign_input_len = PUB_KEY_SIZE + 4 + (raw_len - appdata_off);
+	uint8_t sign_input[PUB_KEY_SIZE + 4 + 128];  /* generous upper bound */
+	memcpy(sign_input,                  &raw[pubkey_off], PUB_KEY_SIZE);
+	memcpy(sign_input + PUB_KEY_SIZE,   &raw[ts_off],     4);
+	memcpy(sign_input + PUB_KEY_SIZE + 4, &raw[appdata_off], raw_len - appdata_off);
+	_self_id.sign(&raw[sig_off], sign_input, (size_t)(PUB_KEY_SIZE + 4 + raw_len - appdata_off));
+
+	/* ---- Build JSON ---- */
+	uint32_t now_epoch = now_ts;
+	struct tm tm_now;
+	time_t t = (time_t)now_epoch;
+	gmtime_r(&t, &tm_now);
+
+	char ts_buf[48];
+	snprintf(ts_buf, sizeof(ts_buf), "%04d-%02d-%02dT%02d:%02d:%02d.000000",
+		 tm_now.tm_year + 1900, tm_now.tm_mon + 1, tm_now.tm_mday,
+		 tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+	char time_buf[12], date_buf[32];
+	snprintf(time_buf, sizeof(time_buf), "%02d:%02d:%02d",
+		 tm_now.tm_hour, tm_now.tm_min, tm_now.tm_sec);
+	snprintf(date_buf, sizeof(date_buf), "%d/%d/%04d",
+		 tm_now.tm_mday, tm_now.tm_mon + 1, tm_now.tm_year + 1900);
+
+	char raw_hex[sizeof(raw) * 2 + 1];
+	Utils::toHex(raw_hex, raw, raw_len);
+	raw_hex[raw_len * 2] = '\0';
+
+	static char json_buf[1024];
+	int json_len = snprintf(json_buf, sizeof(json_buf),
+		"{"
+		"\"type\":\"PACKET\","
+		"\"origin\":\"%s\","
+		"\"origin_id\":\"%s\","
+		"\"timestamp\":\"%s\","
+		"\"direction\":\"rx\","
+		"\"time\":\"%s\","
+		"\"date\":\"%s\","
+		"\"len\":\"%d\","
+		"\"packet_type\":\"%u\","
+		"\"route\":\"D\","
+		"\"payload_len\":\"%d\","
+		"\"raw\":\"%s\","
+		"\"SNR\":\"0\","
+		"\"RSSI\":\"0\","
+		"\"score\":\"0\","
+		"\"hash\":\"0000000000000000\""
+		"}",
+		name,
+		_pubkey_hex,
+		ts_buf,
+		time_buf,
+		date_buf,
+		raw_len,
+		(unsigned)PAYLOAD_TYPE_ADVERT,
+		raw_len - 2,  /* payload_len = raw_len minus header and path_len_byte */
+		raw_hex);
+
+	if (json_len < 0 || json_len >= (int)sizeof(json_buf)) {
+		LOG_WRN("publishSelfAdvert: JSON truncated");
+		return;
+	}
+
+	mqtt_publisher_enqueue(_packets_topic, json_buf, json_len);
+	LOG_INF("Self-advert published (lat=%.6f lon=%.6f)",
+		(double)_creds->lat_e6 / 1e6, (double)_creds->lon_e6 / 1e6);
 }
 
 } /* namespace mesh */

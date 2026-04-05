@@ -48,6 +48,13 @@ bool mqtt_publisher_is_connected(void);
  */
 void mqtt_publisher_reconnect(void);
 
+/*
+ * Register a callback invoked once each time MQTT connects (CONNACK received).
+ * Called from the MQTT publisher thread — keep it short.
+ * Pass NULL to clear.
+ */
+void mqtt_publisher_set_connect_cb(void (*cb)(void));
+
 #ifdef __cplusplus
 }
 #endif

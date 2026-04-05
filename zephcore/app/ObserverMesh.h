@@ -74,6 +74,11 @@ public:
 	 * the full banner (too long for the reply buffer). */
 	bool handleCLI(const char *command, char *reply, int reply_size);
 
+	/* Publish a synthetic zero-hop advert for this observer to the packets
+	 * topic so that CoreScope can place it on the map.  No-op if lat/lon
+	 * are not configured in the creds struct. */
+	void publishSelfAdvert();
+
 	/* Accessors used by main_observer.cpp */
 	NodePrefs *getNodePrefs()               { return &_prefs; }
 	const LocalIdentity &getSelfId() const  { return _self_id; }

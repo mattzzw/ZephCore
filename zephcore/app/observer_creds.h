@@ -24,7 +24,9 @@ struct ObserverCreds {
 	char mqtt_user[64];      /* MQTT username */
 	char mqtt_password[64];  /* MQTT password */
 	char mqtt_iata[8];       /* IATA location code, e.g. "BUD", "BTS", "VIE" */
-	uint8_t  _reserved[5];   /* alignment / future use */
+	uint8_t  _reserved[1];   /* alignment / future use */
+	int32_t  lat_e6;          /* latitude  × 1 000 000 (e.g. 47497900 = 47.497900°N) */
+	int32_t  lon_e6;          /* longitude × 1 000 000 (e.g. 19040200 = 19.040200°E) */
 };
 
 /* Load creds from /lfs/repeater/obs_creds.
