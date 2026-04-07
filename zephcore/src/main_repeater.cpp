@@ -284,6 +284,10 @@ static NodePrefs radio_prefs;
 /* LR1110 via Zephyr LoRa driver */
 static const struct device *const lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
 static mesh::LR1110Radio lora_radio(lora_dev, zephyr_board, &radio_prefs);
+#elif IS_ENABLED(CONFIG_ZEPHCORE_RADIO_SX127X)
+/* SX127x via Zephyr loramac-node driver */
+static const struct device *const lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));
+static mesh::SX127xRadio lora_radio(lora_dev, zephyr_board, &radio_prefs);
 #else
 /* SX126x via Zephyr LoRa driver */
 static const struct device *const lora_dev = DEVICE_DT_GET(DT_ALIAS(lora0));

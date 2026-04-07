@@ -1,0 +1,55 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ * TTGO LoRa32 — ZephCore overlay
+ *
+ * The upstream Zephyr DTS (ttgo_lora32_esp32_procpu.dts) already defines:
+ *   SX1276 on SPI3 (NSS=GPIO18, SCK/MOSI/MISO via pinctrl)
+ *   SSD1306 OLED on I2C0 (SDA=GPIO21, SCL=GPIO22)
+ *   UART0 console (TX=GPIO1, RX=GPIO3)
+ *   LED0 on GPIO25, WiFi
+ *
+ * LoRa SPI3 pins: NSS=18, DIO0=26, DIO1=35, DIO2=34
+ * LoRa control:   RESET=23
+ * Display I2C0:   SDA=21, SCL=22 (SSD1306 @ 0x3C)
+ *
+ * Flash layout (partitions_0x1000_amp_4M.dtsi):
+ *   storage_partition @ 0x3B0000 (192KB) — repurposed as LittleFS
+ */
+
+/ {
+	chosen {
+		/* UART0 console is correct for classic ESP32 (no native USB) */
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
+};
+
+/*
+ * Flash partitions — repurpose storage_partition as LittleFS.
+ * The 4MB layout has appcpu slots we don't use (procpu-only build),
+ * but we leave them to avoid changing the partition map.
+ */
+/delete-node/ &storage_partition;
+
+&flash0 {
+	partitions {
+		/* LittleFS 192KB for DataStore (identity, prefs, creds) */
+		lfs_partition: partition@3b0000 {
+			label = "lfs";
+			reg = <0x3B0000 0x30000>;
+		};
+	};
+};
+
+/* LittleFS auto-mount — standard /lfs mount point */
+#include "../../common/filesystem.dtsi"
+
+/* WiFi — required for observer MQTT connectivity */
+&wifi {
+	status = "okay";
+};
+
+/* I2C sensors — auto-detected at runtime */
+&i2c0 {
+	#include "../../common/sensors-i2c.dtsi"
+};

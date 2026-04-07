@@ -268,6 +268,23 @@ config ZEPHCORE_RADIO_LR2021
 	  Supports sub-GHz + 2.4 GHz ISM + NTN/SATCOM.
 	  TCXO, RF switch, and PA config are in the device tree.
 
+config ZEPHCORE_RADIO_SX127X
+	bool "SX127x (SX1272/SX1276/SX1278) via Zephyr loramac-node driver"
+	help
+	  Uses Zephyr's loramac-node-based LoRa driver for SX127x radios.
+	  Supports SX1272, SX1276, and SX1278 chips via the standard Zephyr
+	  LoRa API (lora_config, lora_send_async, lora_recv_async).
+
+	  Chip-specific features not available via standard API are stubbed:
+	    - Instantaneous RSSI (hwGetCurrentRSSI returns -80 dBm sentinel)
+	    - Preamble detection (always false — TX won't abort mid-preamble)
+	    - RX boost (no-op — SX127x has no dedicated boost register)
+	    - AGC reset (no-op — loramac-node manages AGC internally)
+	    - BUSY pin (false — SX127x has no BUSY signal)
+
+	  Used by: TTGO LoRa32, Heltec LoRa32 V1/V2, and any board with
+	  an SX1272/SX1276/SX1278 radio.
+
 endchoice
 
 config ZEPHCORE_DEFAULT_TX_POWER_DBM
@@ -357,7 +374,7 @@ menu "LoRa Power Saving"
 
 config ZEPHCORE_LORA_RX_DUTY_CYCLE
 	bool "Enable LoRa RX duty cycle power saving"
-	default y if (ZEPHCORE_ROLE_COMPANION || ZEPHCORE_ROLE_REPEATER) && !ZEPHCORE_RADIO_LR1110 && !ZEPHCORE_RADIO_LR2021
+	default y if (ZEPHCORE_ROLE_COMPANION || ZEPHCORE_ROLE_REPEATER) && !ZEPHCORE_RADIO_LR1110 && !ZEPHCORE_RADIO_LR2021 && !ZEPHCORE_RADIO_SX127X
 	default n
 	help
 	  Enable RX duty cycling for power saving on battery-powered devices.

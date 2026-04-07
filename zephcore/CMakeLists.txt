@@ -375,6 +375,11 @@ elseif(CONFIG_ZEPHCORE_RADIO_LR2021)
   target_include_directories(app PRIVATE
     ${ZEPHYR_DIR_LR20}/drivers/lora/lr20xx
   )
+elseif(CONFIG_ZEPHCORE_RADIO_SX127X)
+  message(STATUS "ZephCore Radio: SX127x (Zephyr loramac-node driver)")
+  target_sources(app PRIVATE
+    adapters/radio/SX127xRadio.cpp
+  )
 else()
   # Default: SX126x via native Zephyr LoRa driver
   message(STATUS "ZephCore Radio: SX126x (native Zephyr driver)")

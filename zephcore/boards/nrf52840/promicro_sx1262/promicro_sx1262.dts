@@ -1,0 +1,196 @@
+/*
+ * ProMicro SX1262 — nRF52840 SuperMini + Ebyte E22-900M30S
+ * Copyright (c) 2025 ZephCore
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Hardware:
+ * - nRF52840 (SuperMini/ProMicro form factor) with BLE 5
+ * - Ebyte E22-900M30S (SX1262 + 30dB PA), TCXO, DIO2=TXEN, RXEN on P0.17
+ * - GPS module on UART0 (9600 baud, P0.22 RX, P0.20 TX)
+ * - Battery ADC on AIN7 (P0.31), 150K+150K divider (2:1)
+ * - User button on P1.00, LED on P0.15
+ * - 3V3 enable on P0.13 (must be HIGH for SX1262 to function)
+ */
+
+/dts-v1/;
+#include <nordic/nrf52840_qiaa.dtsi>
+#include "promicro_sx1262-pinctrl.dtsi"
+#include <zephyr/dt-bindings/adc/nrf-saadc.h>
+#include <zephyr/dt-bindings/input/input-event-codes.h>
+#include <zephyr/dt-bindings/lora/sx126x.h>
+
+/ {
+	model = "ProMicro SX1262";
+	compatible = "zephcore,promicro-sx1262";
+
+	chosen {
+		zephyr,sram = &sram0;
+		zephyr,flash = &flash0;
+		zephyr,code-partition = &code_partition;
+		zephyr,console = &cdc_acm_uart;
+		zephyr,shell-uart = &cdc_acm_uart;
+	};
+
+	aliases {
+		lora0 = &lora;
+		led0 = &led0;
+		sw0 = &user_button;
+		watchdog0 = &wdt0;
+		gps-enable = &gps_enable_pin;
+	};
+
+	leds {
+		compatible = "gpio-leds";
+		led0: led_0 {
+			gpios = <&gpio0 15 GPIO_ACTIVE_HIGH>;
+			label = "LED";
+		};
+	};
+
+	buttons: buttons {
+		compatible = "gpio-keys";
+		user_button: button_0 {
+			gpios = <&gpio1 0 (GPIO_PULL_UP | GPIO_ACTIVE_LOW)>;
+			zephyr,code = <INPUT_KEY_ENTER>;
+			label = "User Button";
+		};
+	};
+
+	/* 3V3 enable — must be HIGH to power E22-900M30S module */
+	vcc3v3_enable: vcc3v3-enable {
+		compatible = "regulator-fixed";
+		regulator-name = "vcc3v3-enable";
+		enable-gpios = <&gpio0 13 GPIO_ACTIVE_HIGH>;
+		regulator-boot-on;
+		startup-delay-us = <5000>;
+	};
+
+	/* GPS power control */
+	gps_en: gps-enable {
+		compatible = "gpio-leds";
+		gps_enable_pin: gps_enable {
+			gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
+			label = "GPS Enable";
+		};
+	};
+
+	/* Battery ADC: P0.31 (AIN7), 1M+1.5M voltage divider (5:3) */
+	zephyr,user {
+		io-channels = <&adc 7>;
+		vbat-mv-multiplier = <6000>;
+	};
+};
+
+&reg0 {
+	status = "okay";
+};
+
+&reg1 {
+	regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
+&uicr {
+	nfct-pins-as-gpios;
+};
+
+&gpiote {
+	status = "okay";
+};
+
+&gpio0 {
+	status = "okay";
+};
+
+&gpio1 {
+	status = "okay";
+};
+
+&adc {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	/* Battery voltage on P0.31 (AIN7) */
+	channel@7 {
+		reg = <7>;
+		zephyr,gain = "ADC_GAIN_1_6";
+		zephyr,reference = "ADC_REF_INTERNAL";
+		zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_MICROSECONDS, 10)>;
+		zephyr,input-positive = <NRF_SAADC_AIN7>;
+		zephyr,resolution = <12>;
+	};
+};
+
+/* ---- SPI2 for SX1262 (Ebyte E22-900M30S) ---- */
+&spi2 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	pinctrl-0 = <&spi2_default>;
+	pinctrl-1 = <&spi2_sleep>;
+	pinctrl-names = "default", "sleep";
+	cs-gpios = <&gpio1 13 GPIO_ACTIVE_LOW>;   /* P1.13 SX1262_CS */
+
+	lora: lora@0 {
+		compatible = "semtech,sx1262";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+
+		reset-gpios = <&gpio0  9 GPIO_ACTIVE_LOW>;
+		busy-gpios  = <&gpio0 29 GPIO_ACTIVE_HIGH>;
+		dio1-gpios  = <&gpio0 10 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>;
+
+		/* RF switch: DIO2 drives TXEN, RXEN on P0.17 */
+		dio2-tx-enable;
+		rx-enable-gpios = <&gpio0 17 GPIO_ACTIVE_HIGH>;
+
+		/* E22-900M30S TCXO, 1.8V supply via DIO3 */
+		dio3-tcxo-voltage = <SX126X_DIO3_TCXO_1V8>;
+		tcxo-power-startup-delay-ms = <10>;
+
+		/* RX boosted mode for better sensitivity */
+		rx-boosted;
+	};
+};
+
+/* ---- I2C0 for optional sensors ---- */
+&i2c0 {
+	compatible = "nordic,nrf-twim";
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_FAST>;
+	pinctrl-0 = <&i2c0_default>;
+	pinctrl-1 = <&i2c0_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	/* All supported environment & power sensors — auto-detected at runtime */
+	#include "../../common/sensors-i2c.dtsi"
+};
+
+/* ---- GPS on UART0 (9600 baud) ---- */
+&uart0 {
+	compatible = "nordic,nrf-uarte";
+	status = "okay";
+	current-speed = <9600>;
+	pinctrl-0 = <&uart0_default>;
+	pinctrl-1 = <&uart0_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	gnss: gnss {
+		compatible = "luatos,air530z";
+		on-off-gpios = <&gpio0 24 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+/* ---- USB CDC for console/CLI ---- */
+zephyr_udc0: &usbd {
+	compatible = "nordic,nrf-usbd";
+	status = "okay";
+
+	cdc_acm_uart: cdc_acm_uart {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/* ---- Flash partitions (SoftDevice v6, app@0x26000) ---- */
+#include "../../common/nrf52_partitions_sdv6.dtsi"
+#include "../../common/nrf52_wakeup.dtsi"

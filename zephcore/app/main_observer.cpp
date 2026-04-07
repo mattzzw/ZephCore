@@ -288,6 +288,8 @@ static NodePrefs s_radio_prefs;
 
 #if IS_ENABLED(CONFIG_ZEPHCORE_RADIO_LR1110)
 static mesh::LR1110Radio lora_radio(lora_dev, s_board, &s_radio_prefs);
+#elif IS_ENABLED(CONFIG_ZEPHCORE_RADIO_SX127X)
+static mesh::SX127xRadio lora_radio(lora_dev, s_board, &s_radio_prefs);
 #else
 static mesh::SX126xRadio lora_radio(lora_dev, s_board, &s_radio_prefs);
 #endif

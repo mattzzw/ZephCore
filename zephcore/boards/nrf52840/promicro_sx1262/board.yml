@@ -1,0 +1,8 @@
+# Copyright (c) 2025 ZephCore
+# SPDX-License-Identifier: Apache-2.0
+board:
+  name: promicro_sx1262
+  full_name: ProMicro sx1262 (nRF52840 SuperMini + sx1262)
+  vendor: zephcore
+  socs:
+    - name: nrf52840
