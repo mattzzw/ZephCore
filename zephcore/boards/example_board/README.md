@@ -40,18 +40,32 @@ unclear, check GPIO2's default pull: the V4.2 GC1109 PA has an internal pull-dow
 (GPIO2 reads LOW at boot), while the V4.3 KCT8103L PA has an internal pull-up
 (GPIO2 reads HIGH). Only difference in firmware: TX control pin GPIO46→GPIO5.
 
-ESP32 flash uses esptool over USB. Hold BOOT button if device doesn't enter download mode.
+ESP32 flash uses esptool over USB via `west flash`. Hold BOOT button if the device
+doesn't enter download mode automatically.
 
-**First-time setup required (all ESP32 boards):**
+Zephyr's `CONFIG_ESP_SIMPLE_BOOT` is active by default (no MCUBoot). The build
+produces a self-contained `zephyr.bin` that the ESP32 ROM bootloader loads directly
+from `0x0` — no special first-flash procedure, works on a bare chip.
+
+**Exception — WiFi AP OTA** (`boards/common/wifi_ota.conf`): the HTTP OTA updater
+writes firmware to MCUBoot slot1 and requires MCUBoot. Add `--sysbuild` when building
+with `wifi_ota.conf`, and run `west flash` once to seat MCUBoot before OTA works:
+```bash
+west build -b <board>/esp32s3/procpu zephcore --pristine --sysbuild -- \
+  -DEXTRA_CONF_FILE="boards/common/wifi_ota.conf"
+west flash --esp-device COMX
+```
+
+**One-time setup required (all ESP32 boards):**
 
 ```
 # Download Espressif BLE controller blobs (closed-source, required for BLE)
 west blobs fetch hal_espressif
 ```
 
-Run this once after `west init`/`west update`. Without it, CMake will abort with
-a blob validation error during configure. Re-run after any `west update` that
-bumps the `hal_espressif` revision.
+Run once after `west init`/`west update`. Without it, CMake aborts with a blob
+validation error. Re-run after any `west update` that bumps the `hal_espressif`
+revision.
 
 ### nRF54L15
 
